@@ -1,0 +1,12 @@
+[package]
+name = "luminary"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+analisar = "0.2"
+inkwell = { version = "0.2", features = ["llvm12-0"] }
+thiserror = "1"
+hash-chain = "0.3"
+fxhash = "0.2.1"
