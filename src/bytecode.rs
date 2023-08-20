@@ -1,15 +1,22 @@
-use core::{cmp, fmt};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use core::fmt;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::Error;
 use analisar::ast::{Args, BinaryOperator, Expression, Field, Statement, UnaryOperator};
+use inkwell::{
+    builder::Builder,
+    context::Context,
+    module::Module,
+    types::{BasicType, StructType},
+    values::AnyValue,
+    AddressSpace,
+};
 
 fn resolve_ids(stmts: Vec<Statement>) -> BTreeMap<String, DataType> {
     let mut known_ids = BTreeMap::new();
     for stmt in stmts {
         match stmt {
             Statement::Assignment {
-                local,
+                local: _,
                 targets,
                 values,
             } => {
@@ -153,28 +160,44 @@ fn try_type_args(
             local,
             targets,
             values,
-        } => for (idx, target) in targets.iter().enumerate() {
-            if let Some(target) = expr_to_key(target, known_ids) {
-                let dt = values.get(idx).map(|e| expr_to_data_type(e, known_ids)).unwrap_or(DataType::Any);
-                if local {
-                    shadows.insert(target,dt);
-                } else {
-                    if let Some(known) = known_ids.get_mut(&target) {
-                        known.push(dt);
+        } => {
+            for (idx, target) in targets.iter().enumerate() {
+                if let Some(target) = expr_to_key(target, known_ids) {
+                    let dt = values
+                        .get(idx)
+                        .map(|e| expr_to_data_type(e, known_ids))
+                        .unwrap_or(DataType::Any);
+                    if *local {
+                        shadows.insert(target, dt);
+                    } else {
+                        if let Some(known) = known_ids.get_mut(&target) {
+                            known.push(dt);
+                        }
                     }
                 }
             }
-        },
-        Statement::Label(_) => todo!(),
-        Statement::Break => todo!(),
-        Statement::GoTo(_) => todo!(),
-        Statement::Do { block } => todo!(),
-        Statement::While { exp, block } => todo!(),
-        Statement::Repeat { block, exp } => todo!(),
+        }
+        Statement::Label(_) | Statement::Break | Statement::GoTo(_) => {}
+        Statement::Do { block } => {
+            for stmt in &block.0 {
+                try_type_args(stmt, args, arg_aliases, shadows, known_ids);
+            }
+        }
+        Statement::While { exp, .. } => {
+            if let Some(name) = expr_to_key(exp, known_ids) {
+                if let Some(shadow) = shadows.get_mut(&name) {
+                    shadow.push(DataType::Bool);
+                } else if let Some(idx) = arg_aliases.get(&name) {
+                    let arg = args.get_mut(*idx).expect("invalid function args");
+                    arg.push(DataType::Bool);
+                }
+            }
+        }
+        Statement::Repeat { .. } => todo!(),
         Statement::If(_) => todo!(),
         Statement::For(_) => todo!(),
         Statement::ForIn(_) => todo!(),
-        Statement::Function { local, name, body } => todo!(),
+        Statement::Function { .. } => todo!(),
         Statement::Return(rets) => {
             for expr in &rets.0 {
                 try_type_args_from_expr(expr, args, arg_aliases, shadows, known_ids)
@@ -223,35 +246,34 @@ fn try_type_args_from_expr(
         Expression::FuncCall(call) => {
             match call.prefix.as_ref() {
                 Expression::Name(fn_name) => {
-                    if let Some(shadowed) = shadows.get_mut(fn_name.name.as_ref()) {
+                    if let Some(_shadowed) = shadows.get_mut(fn_name.name.as_ref()) {
                         // TODO update shadowed function def?
                         return;
                     }
                     if let Some(idx) = arg_aliases.get(fn_name.name.as_ref()) {
-                        let arg = args.get_mut(*idx).expect("invalid function args");
                         match &call.args {
                             Args::ExpList(list) => {
-                                for (idx, exp) in list.iter().enumerate() {
+                                if let Some(exp) = list.get(*idx) {
                                     let mut temp_ki: BTreeMap<String, DataType> = known_ids
                                         .clone()
                                         .into_iter()
                                         .chain(shadows.clone().into_iter())
                                         .collect();
-                                    if let Some(arg) = args.get_mut(idx) {
-                                        arg.push(expr_to_data_type(expr, &mut temp_ki));
+                                    if let Some(arg) = args.get_mut(*idx) {
+                                        arg.push(expr_to_data_type(exp, &mut temp_ki));
                                     } else {
-                                        args.push(expr_to_data_type(expr, &mut temp_ki));
+                                        args.push(expr_to_data_type(exp, &mut temp_ki));
                                     }
                                 }
                             }
-                            Args::Table(t) => {
+                            Args::Table(_t) => {
                                 if let Some(arg) = args.get_mut(0) {
-                                    args.push(DataType::Table {
+                                    arg.push(DataType::Table {
                                         props: BTreeMap::new(),
                                     })
                                 }
                             }
-                            Args::String(s) => {
+                            Args::String(_s) => {
                                 if let Some(arg) = args.get_mut(0) {
                                     arg.push(DataType::String);
                                 } else {
@@ -270,7 +292,7 @@ fn try_type_args_from_expr(
                     //         Args::String(_) => {}
                     //     }
                     // }
-                    if let Some(known) = known_ids.get_mut(fn_name.name.as_ref()) {
+                    if let Some(_known) = known_ids.get_mut(fn_name.name.as_ref()) {
                         // TODO: update global function def?
                         return;
                     }
@@ -283,7 +305,8 @@ fn try_type_args_from_expr(
     }
 }
 
-fn expr_to_key(expr: &Expression, known_ids: &BTreeMap<String, DataType>) -> Option<String> {
+fn expr_to_key(expr: &Expression, _known_ids: &BTreeMap<String, DataType>) -> Option<String> {
+    #[allow(unused_variables, dead_code)]
     match expr {
         Expression::Nil => todo!(),
         Expression::False => todo!(),
@@ -323,7 +346,7 @@ pub struct FunctionDataType {
 }
 
 impl FunctionDataType {
-    fn join(&mut self, other: Self) {
+    pub fn join(&mut self, other: Self) {
         let mut right_iter = other.args.into_iter();
         {
             let mut left_iter = self.args.iter_mut();
@@ -374,7 +397,7 @@ impl fmt::Display for DataType {
                         write!(f, ", ")?;
                     }
                     let mut after_first_name = false;
-                    for (k, _) in arg_aliases.iter().filter(|(k, v)| **v == idx) {
+                    for (k, _) in arg_aliases.iter().filter(|(_, v)| **v == idx) {
                         if after_first_name {
                             write!(f, "|")?;
                         }
@@ -385,7 +408,6 @@ impl fmt::Display for DataType {
                     after_first = true;
                 }
                 write!(f, ")")?;
-                after_first = false;
                 if !matches!(rets.as_ref(), &DataType::Nil) {
                     write!(f, " -> {rets}")?
                 }
@@ -452,6 +474,278 @@ fn un_op_to_dt(op: &UnaryOperator) -> DataType {
     }
 }
 
+pub enum TValue {
+    Nil,
+    Bool(bool),
+    Number(f32),
+    String(Vec<u8>),
+    Table(Vec<TableField>),
+    Function { id: u32 },
+    Thread { id: u32 },
+    UserData { id: u32 },
+}
+
+impl TValue {
+    pub(crate) const BASE_TYPE_NAME: &str = "enum.TValue";
+    pub(crate) const GET_TAG_FN_NAME: &str = "getTValueTag";
+
+    fn tvalue_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
+        context.struct_type(
+            &[
+                context.i8_type().into(),
+                context.i8_type().array_type(7).into(),
+            ],
+            false,
+        )
+    }
+    fn tvalue_nil_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
+        context.struct_type(&[context.i8_type().into()], false)
+    }
+
+    fn tvalue_bool_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
+        context.struct_type(
+            &[
+                context.i8_type().array_type(1).into(),
+                context.i8_type().into(),
+            ],
+            false,
+        )
+    }
+
+    fn tvalue_number_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
+        context.struct_type(
+            &[
+                context.i32_type().array_type(1).into(),
+                context.f32_type().into(),
+            ],
+            false,
+        )
+    }
+
+    fn tvalue_table_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
+        context.struct_type(
+            &[
+                context.i32_type().array_type(1).into(),
+                context.i32_type().into(),
+            ],
+            false,
+        )
+    }
+
+    fn tvalue_func_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
+        context.struct_type(
+            &[
+                context.i8_type().into(),
+                // args length
+                context.i8_type().into(),
+                // args
+                Self::tvalue_type(context)
+                    .array_type(0)
+                    .ptr_type(AddressSpace::from(0u16))
+                    .into(),
+            ],
+            false,
+        )
+    }
+
+    pub fn gen_lib<'ctx>(context: &'ctx Context) -> Module<'ctx> {
+        let module = context.create_module("__intrinsics_tvalue");
+
+        let builder = context.create_builder();
+        Self::add_get_tag_function(context, &module, &builder);
+        Self::add_get_value_bool(context, &module, &builder);
+        Self::add_new_nil(context, &module, &builder);
+        Self::add_new_bool(context, &module, &builder);
+        module.verify().unwrap();
+        module
+    }
+
+    fn add_new_bool<'ctx>(context: &'ctx Context, module: &Module<'ctx>, builder: &Builder<'ctx>) {
+        let enum_base_ty = Self::tvalue_type(context);
+        let f = enum_base_ty
+            .ptr_type(0u16.into())
+            .fn_type(&[context.bool_type().into()], false);
+        let f = module.add_function("enum_TValue_bool_new", f, None);
+        let entry = context.append_basic_block(f.clone(), "entry");
+        builder.position_at_end(entry);
+        let ret = builder.build_alloca(enum_base_ty, "ret");
+        let tag_ptr = unsafe {
+            builder.build_in_bounds_gep(
+                ret.get_type(),
+                ret,
+                &[
+                    context.i32_type().const_int(0, false),
+                    context.i32_type().const_int(0, false),
+                ],
+                "tag_ptr",
+            )
+        };
+        builder.build_store(tag_ptr, context.i8_type().const_int(1, false));
+        let casted = builder.build_bitcast(
+            ret,
+            Self::tvalue_bool_type(context).ptr_type(0u16.into()),
+            "casted",
+        );
+        let gep = unsafe {
+            builder.build_in_bounds_gep(
+                casted.get_type(),
+                casted.into_pointer_value(),
+                &[
+                    context.i32_type().const_int(0, false),
+                    context.i32_type().const_int(1, false),
+                ],
+                "bool_ptr",
+            )
+        };
+        let arg = f.get_param_iter().next().expect("new bool has 1 argument");
+        arg.set_name("is_true");
+        let wide_arg =
+            builder.build_int_z_extend(arg.into_int_value(), context.i8_type(), "wide_arg");
+        builder.build_store(gep, wide_arg);
+        builder.build_return(Some(&ret));
+    }
+
+    fn add_new_nil<'ctx>(context: &'ctx Context, module: &Module<'ctx>, builder: &Builder<'ctx>) {
+        let enum_base_ty = Self::tvalue_type(context);
+        let f = enum_base_ty.ptr_type(0u16.into()).fn_type(&[], false);
+        let f = module.add_function("enum_TValue_nil_new", f, None);
+        let entry = context.append_basic_block(f.clone(), "entry");
+        builder.position_at_end(entry);
+        let ret = builder.build_alloca(enum_base_ty, "ret");
+        let tag_ptr = unsafe {
+            builder.build_in_bounds_gep(
+                ret.get_type(),
+                ret,
+                &[
+                    context.i32_type().const_int(0, false),
+                    context.i32_type().const_int(0, false),
+                ],
+                "tag_ptr",
+            )
+        };
+        builder.build_store(tag_ptr, context.i8_type().const_int(0, false));
+        let val_ptr = unsafe {
+            builder.build_in_bounds_gep(
+                ret.get_type(),
+                ret,
+                &[
+                    context.i32_type().const_int(0, false),
+                    context.i32_type().const_int(1, false),
+                ],
+                "tag_ptr",
+            )
+        };
+        builder.build_store(val_ptr, context.i8_type().array_type(7).const_zero());
+        builder.build_return(Some(&ret));
+    }
+
+    fn add_get_tag_function<'ctx>(
+        context: &'ctx Context,
+        module: &Module<'ctx>,
+        builder: &Builder<'ctx>,
+    ) {
+        let get_tag_ty = context.i8_type().fn_type(
+            &[Self::tvalue_type(context).ptr_type(0u16.into()).into()],
+            false,
+        );
+        let func = module.add_function(Self::GET_TAG_FN_NAME, get_tag_ty, None);
+        let arg_ptr = func.get_param_iter().next().unwrap().into_pointer_value();
+        arg_ptr.set_name("tagged_value");
+        let entry_block = context.append_basic_block(func, "entry");
+        builder.position_at_end(entry_block);
+        let tag_alloc = builder.build_alloca(context.i8_type(), "tag");
+        let tag_gep = unsafe {
+            builder.build_in_bounds_gep(
+                arg_ptr.get_type(),
+                arg_ptr,
+                &[
+                    context.i32_type().const_int(0, false),
+                    context.i32_type().const_int(0, false),
+                ],
+                "tag_ptr",
+            )
+        };
+        let tag_load = builder.build_load(tag_gep.get_type(), tag_gep, "tag_val");
+        builder.build_store(tag_alloc.clone(), tag_load);
+        let val = builder.build_load(tag_alloc.get_type(), tag_alloc, "ret_val");
+        builder.build_return(Some(&val));
+    }
+
+    fn add_get_value_bool<'ctx>(
+        context: &'ctx Context,
+        module: &Module<'ctx>,
+        builder: &Builder<'ctx>,
+    ) {
+        let get_tag_ty = context.bool_type().fn_type(
+            &[Self::tvalue_type(context).ptr_type(0u16.into()).into()],
+            false,
+        );
+        let func = module.add_function("getTValueValue_bool", get_tag_ty, None);
+        let arg_ptr = func.get_param_iter().next().unwrap().into_pointer_value();
+        arg_ptr.set_name("tagged_value");
+        let entry_block = context.append_basic_block(func.clone(), "entry");
+        builder.position_at_end(entry_block.clone());
+        let get_tag_func = module
+            .get_function(Self::GET_TAG_FN_NAME)
+            .expect("getTagFn");
+        let call = builder.build_call(get_tag_func, &[arg_ptr.into()], "tag");
+        let cmp_tag = call.as_any_value_enum();
+        let is_nil = builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            cmp_tag.into_int_value(),
+            context.i8_type().const_int(0, false),
+            "is_nil",
+        );
+        let is_nil_block = context.append_basic_block(func.clone(), "is_nil");
+        let is_not_nil_block = context.append_basic_block(func.clone(), "is_not_nil");
+        builder.build_conditional_branch(is_nil.clone(), is_nil_block.clone(), is_not_nil_block);
+        builder.position_at_end(is_nil_block.clone());
+        builder.build_return(Some(&context.bool_type().const_int(0, false)));
+        builder.position_at_end(is_not_nil_block.clone());
+        let is_bool = builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            cmp_tag.into_int_value(),
+            context.i8_type().const_int(1, false),
+            "is_bool",
+        );
+        let is_bool_block = context.append_basic_block(func.clone(), "is_bool");
+        let is_not_bool_block = context.append_basic_block(func, "is_not_bool");
+        builder.build_conditional_branch(is_bool, is_bool_block.clone(), is_not_bool_block.clone());
+        builder.position_at_end(is_not_bool_block.clone());
+        builder.build_return(Some(&context.bool_type().const_int(1, false)));
+        builder.position_at_end(is_bool_block);
+        let casted_t = builder.build_bitcast(
+            arg_ptr,
+            Self::tvalue_bool_type(context).ptr_type(0u16.into()),
+            "t_bool",
+        );
+        let gep = unsafe {
+            builder.build_in_bounds_gep(
+                casted_t.get_type().ptr_type(0u16.into()),
+                casted_t.into_pointer_value(),
+                &[
+                    context.i32_type().const_int(0, false),
+                    context.i32_type().const_int(1, false),
+                ],
+                "raw_variant_pointer",
+            )
+        };
+        let load_bool = builder.build_load(gep.get_type().ptr_type(0u16.into()), gep, "bool_t_int");
+        let ret = builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            load_bool.into_int_value(),
+            context.i8_type().const_int(1, false),
+            "ret",
+        );
+        builder.build_return(Some(&ret));
+    }
+}
+
+pub struct TableField {
+    pub name: String,
+    pub value: TValue,
+}
+
 impl DataType {
     /// Union a type with this type
     pub fn join(self, other: Self) -> Self {
@@ -475,7 +769,7 @@ impl DataType {
     }
 
     /// Append a type with this type to a Multi
-    pub fn push(&mut self, mut other: Self) {
+    pub fn push(&mut self, other: Self) {
         if matches!(self, Self::Any) {
             *self = other;
             return;

@@ -6,7 +6,9 @@ edition = "2021"
 
 [dependencies]
 analisar = "0.2"
-inkwell = { version = "0.2", features = ["llvm12-0"] }
+inkwell = { version = "0.2", features = ["llvm16-0"] }
 thiserror = "1"
 hash-chain = "0.3"
-fxhash = "0.2.1"
+
+[dev-dependencies]
+insta = "1.31"
