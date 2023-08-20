@@ -1,0 +1,70 @@
+---
+source: src/tvalue.rs
+expression: module.to_string()
+---
+; ModuleID = 'std::tvalue'
+source_filename = "std::tvalue"
+
+define i8 @getTValueTag(ptr %tagged_value) {
+entry:
+  %tag = alloca i8, align 1
+  %tag_ptr = getelementptr inbounds { i8, [7 x i8] }, ptr %tagged_value, i32 0, i32 0
+  %tag_val = load i8, ptr %tag_ptr, align 1
+  store i8 %tag_val, ptr %tag, align 1
+  %ret_val = load i8, ptr %tag, align 1
+  ret i8 %ret_val
+}
+
+define i1 @getTValueValue_bool(ptr %tagged_value) {
+entry:
+  %tag = call i8 @getTValueTag(ptr %tagged_value)
+  %is_nil = icmp eq i8 %tag, 0
+  br i1 %is_nil, label %is_nil1, label %is_not_nil
+
+is_nil1:                                          ; preds = %entry
+  ret i1 false
+
+is_not_nil:                                       ; preds = %entry
+  %is_bool = icmp eq i8 %tag, 1
+  br i1 %is_bool, label %is_bool2, label %is_not_bool
+
+is_bool2:                                         ; preds = %is_not_nil
+  %raw_variant_pointer = getelementptr inbounds { [1 x i8], i8 }, ptr %tagged_value, i32 0, i32 1
+  %bool_t_int = load i8, ptr %raw_variant_pointer, align 1
+  %ret = icmp eq i8 %bool_t_int, 1
+  ret i1 %ret
+
+is_not_bool:                                      ; preds = %is_not_nil
+  ret i1 true
+}
+
+define ptr @enum_TValue_nil_new() {
+entry:
+  %ret = alloca { i8, [7 x i8] }, align 8
+  %tag_ptr = getelementptr inbounds { i8, [7 x i8] }, ptr %ret, i32 0, i32 0
+  store i8 0, ptr %tag_ptr, align 1
+  %tag_ptr1 = getelementptr inbounds { i8, [7 x i8] }, ptr %ret, i32 0, i32 1
+  store [7 x i8] zeroinitializer, ptr %tag_ptr1, align 1
+  ret ptr %ret
+}
+
+define ptr @enum_TValue_bool_new(i1 %is_true) {
+entry:
+  %ret = alloca { i8, [7 x i8] }, align 8
+  %tag_ptr = getelementptr inbounds { i8, [7 x i8] }, ptr %ret, i32 0, i32 0
+  store i8 1, ptr %tag_ptr, align 1
+  %bool_ptr = getelementptr inbounds { [1 x i8], i8 }, ptr %ret, i32 0, i32 1
+  %wide_arg = zext i1 %is_true to i8
+  store i8 %wide_arg, ptr %bool_ptr, align 1
+  ret ptr %ret
+}
+
+define ptr @enum_TValue_number_new(float %n) {
+entry:
+  %ret = alloca { i8, [7 x i8] }, align 8
+  %tag_ptr = getelementptr inbounds { i8, [7 x i8] }, ptr %ret, i32 0, i32 0
+  store i8 2, ptr %tag_ptr, align 1
+  %n_ptr = getelementptr inbounds { [1 x i32], float }, ptr %ret, i32 0, i32 1
+  ret ptr %ret
+}
+
