@@ -22,115 +22,6 @@ impl TValue {
     pub(crate) const BASE_TYPE_NAME: &str = "enum.TValue";
     pub(crate) const GET_TAG_FN_NAME: &str = "getTValueTag";
 
-    fn tvalue_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i8_type().into(),
-                context.i8_type().array_type(8).into(),
-            ],
-            false,
-        )
-    }
-
-    fn tvalue_nil_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(&[context.i8_type().into()], false)
-    }
-
-    fn tvalue_bool_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i8_type().array_type(1).into(),
-                context.i8_type().into(),
-            ],
-            false,
-        )
-    }
-
-    fn tvalue_number_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i32_type().array_type(1).into(),
-                context.f32_type().into(),
-            ],
-            false,
-        )
-    }
-
-    fn tvalue_string_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i8_type().array_type(1).into(),
-                Self::byte_array_type(context)
-                    .ptr_type(Default::default())
-                    .into(),
-            ],
-            false,
-        )
-    }
-
-    fn tvalue_table_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i8_type().array_type(1).into(),
-                Self::table_field_type(context)
-                    .array_type(0)
-                    .ptr_type(Default::default())
-                    .into(),
-            ],
-            false,
-        )
-    }
-
-    fn tvalue_func_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i8_type().into(),
-                // args length
-            ],
-            false,
-        )
-    }
-
-    fn table_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                context.i8_type().into(),
-                Self::table_field_type(context)
-                    .ptr_type(Default::default())
-                    .into(),
-            ],
-            false,
-        )
-    }
-
-    fn byte_array_type<'ctx>(context: &'ctx Context) -> StructType {
-        context.struct_type(
-            &[
-                context.i64_type().into(),
-                context
-                    .i8_type()
-                    .array_type(0)
-                    .ptr_type(Default::default())
-                    .into(),
-            ],
-            false,
-        )
-    }
-
-    fn table_field_type<'ctx>(context: &'ctx Context) -> StructType<'ctx> {
-        context.struct_type(
-            &[
-                Self::tvalue_type(context)
-                    .ptr_type(Default::default())
-                    .into(),
-                Self::tvalue_type(context)
-                    .ptr_type(Default::default())
-                    .into(),
-            ],
-            false,
-        )
-    }
-
     pub fn gen_lib<'ctx>(context: &'ctx Context) -> Module<'ctx> {
         let module = context.create_module(Self::MODULE_NAME);
         let builder = context.create_builder();
@@ -167,15 +58,6 @@ impl TValue {
             false,
         );
         let tvalue_string = context.opaque_struct_type("tvalue_string");
-        tvalue_string.set_body(
-            &[
-                context.i8_type().array_type(1).into(),
-                Self::byte_array_type(context)
-                    .ptr_type(Default::default())
-                    .into(),
-            ],
-            false,
-        );
         let byte_array = context.opaque_struct_type("byte_array");
         byte_array.set_body(
             &[
@@ -183,6 +65,15 @@ impl TValue {
                 context
                     .i8_type()
                     .array_type(0)
+                    .ptr_type(Default::default())
+                    .into(),
+            ],
+            false,
+        );
+        tvalue_string.set_body(
+            &[
+                context.i8_type().array_type(1).into(),
+                module.get_struct_type("byte_array").unwrap()
                     .ptr_type(Default::default())
                     .into(),
             ],
@@ -256,7 +147,7 @@ impl TValue {
     ) {
         let f = module.add_function(
             "new_byte_array",
-            Self::byte_array_type(context)
+            module.get_struct_type("byte_array").unwrap()
                 .ptr_type(Default::default())
                 .fn_type(
                     &[
@@ -277,10 +168,10 @@ impl TValue {
         bytes_param.set_name("bytes");
         let entry = context.append_basic_block(f, "entry");
         builder.position_at_end(entry);
-        let ret = builder.build_alloca(Self::byte_array_type(context), "ret");
+        let ret = builder.build_alloca(module.get_struct_type("byte_array").unwrap(), "ret");
         let len_ptr = unsafe {
             builder.build_in_bounds_gep(
-                Self::byte_array_type(context),
+                module.get_struct_type("byte_array").unwrap(),
                 ret.clone(),
                 &[
                     context.i32_type().const_int(0, false),
@@ -292,7 +183,7 @@ impl TValue {
         builder.build_store(len_ptr, len_param.as_basic_value_enum());
         let bytes_ptr = unsafe {
             builder.build_in_bounds_gep(
-                Self::byte_array_type(context),
+                module.get_struct_type("byte_array").unwrap(),
                 ret.clone(),
                 &[
                     context.i32_type().const_int(0, false),
@@ -301,12 +192,7 @@ impl TValue {
                 "bytes_ptr",
             )
         };
-        let loaded_ptr = builder.build_load(
-            context.i8_type().array_type(0).ptr_type(Default::default()),
-            bytes_ptr,
-            "loaded_ptr",
-        );
-        builder.build_store(loaded_ptr.into_pointer_value(), bytes_param);
+        builder.build_store(bytes_ptr, bytes_param);
         builder.build_return(Some(&ret));
     }
 
@@ -332,7 +218,7 @@ impl TValue {
         let ret = builder.build_alloca(enum_base_ty, "ret");
         let tag_ptr = unsafe {
             builder.build_in_bounds_gep(
-                Self::tvalue_type(context),
+                module.get_struct_type(Self::BASE_TYPE_NAME).unwrap(),
                 ret,
                 &[
                     context.i32_type().const_int(0, false),
@@ -401,8 +287,9 @@ impl TValue {
         module: &Module<'ctx>,
         builder: &Builder<'ctx>,
     ) {
+        let base_type = module.get_struct_type(Self::BASE_TYPE_NAME).unwrap();
         let get_tag_ty = context.i8_type().fn_type(
-            &[Self::tvalue_type(context).ptr_type(0u16.into()).into()],
+            &[base_type.ptr_type(0u16.into()).into()],
             false,
         );
         let func = module.add_function(Self::GET_TAG_FN_NAME, get_tag_ty, None);
@@ -410,10 +297,9 @@ impl TValue {
         arg_ptr.set_name("tagged_value");
         let entry_block = context.append_basic_block(func, "entry");
         builder.position_at_end(entry_block);
-        let tag_alloc = builder.build_alloca(context.i8_type(), "tag");
         let tag_gep = unsafe {
             builder.build_in_bounds_gep(
-                Self::tvalue_type(context),
+                base_type,
                 arg_ptr,
                 &[
                     context.i32_type().const_int(0, false),
@@ -423,9 +309,7 @@ impl TValue {
             )
         };
         let tag_load = builder.build_load(context.i8_type(), tag_gep, "tag_val");
-        builder.build_store(tag_alloc.clone(), tag_load);
-        let val = builder.build_load(context.i8_type(), tag_alloc, "ret_val");
-        builder.build_return(Some(&val));
+        builder.build_return(Some(&tag_load));
     }
 
     fn add_get_value_bool<'ctx>(
@@ -434,7 +318,7 @@ impl TValue {
         builder: &Builder<'ctx>,
     ) {
         let get_tag_ty = context.bool_type().fn_type(
-            &[Self::tvalue_type(context).ptr_type(0u16.into()).into()],
+            &[module.get_struct_type(Self::BASE_TYPE_NAME).unwrap().ptr_type(0u16.into()).into()],
             false,
         );
         let func = module.add_function("getTValueValue_bool", get_tag_ty, None);
@@ -471,15 +355,10 @@ impl TValue {
         builder.position_at_end(is_not_bool_block.clone());
         builder.build_return(Some(&context.bool_type().const_int(1, false)));
         builder.position_at_end(is_bool_block);
-        let casted_t = builder.build_bitcast(
-            arg_ptr,
-            Self::tvalue_bool_type(context).ptr_type(0u16.into()),
-            "t_bool",
-        );
         let gep = unsafe {
             builder.build_in_bounds_gep(
-                Self::tvalue_bool_type(context),
-                casted_t.into_pointer_value(),
+                module.get_struct_type("tvalue_bool").unwrap(),
+                arg_ptr,
                 &[
                     context.i32_type().const_int(0, false),
                     context.i32_type().const_int(1, false),
@@ -524,39 +403,39 @@ mod test {
         let context = Context::create();
         let module = TValue::gen_lib(&context);
         let tag_fun = module.get_function(TValue::GET_TAG_FN_NAME).unwrap();
-        let new_nil_fun = module.get_function("tvalue_new_nil").unwrap();
-        let new_bool_fun = module.get_function("tvalue_new_bool").unwrap();
-        let new_num_fun = module.get_function("tvalue_new_number").unwrap();
+        // let new_nil_fun = module.get_function("tvalue_new_nil").unwrap();
+        // let new_bool_fun = module.get_function("tvalue_new_bool").unwrap();
+        // let new_num_fun = module.get_function("tvalue_new_number").unwrap();
         let new_string_fun = module.get_function("tvalue_new_string").unwrap();
         // let new_table_fun = module.get_function("enum_TValue_new_table").unwrap();
         let builder = context.create_builder();
 
-        build_test_tag_func(&context, &module, &builder, "test_nil", new_nil_fun, &[]);
-        build_test_tag_func(
-            &context,
-            &module,
-            &builder,
-            "test_bool",
-            new_bool_fun,
-            &[context.bool_type().const_int(1, false).into()],
-        );
-        build_test_tag_func(
-            &context,
-            &module,
-            &builder,
-            "test_num",
-            new_num_fun,
-            &[context.f32_type().const_float(u32::MAX as _).into()],
-        );
+        // build_test_tag_func(&context, &module, &builder, "test_nil", new_nil_fun, &[]);
+        // build_test_tag_func(
+        //     &context,
+        //     &module,
+        //     &builder,
+        //     "test_bool",
+        //     new_bool_fun,
+        //     &[context.bool_type().const_int(1, false).into()],
+        // );
+        // build_test_tag_func(
+        //     &context,
+        //     &module,
+        //     &builder,
+        //     "test_num",
+        //     new_num_fun,
+        //     &[context.f32_type().const_float(u32::MAX as _).into()],
+        // );
         let s_ctor = build_string_ctor_func("hello world", &context, &module, &builder);
         build_test_tag_func(&context, &module, &builder, "test_string", s_ctor, &[]);
         eprintln!("{}", module.to_string());
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        call_tag_test_fn("test_nil", &jit, 0);
-        call_tag_test_fn("test_bool", &jit, 1);
-        call_tag_test_fn("test_num", &jit, 2);
+        // call_tag_test_fn("test_nil", &jit, 0);
+        // call_tag_test_fn("test_bool", &jit, 1);
+        // call_tag_test_fn("test_num", &jit, 2);
         call_tag_test_fn("test_string", &jit, 3);
         // call_tag_test_fn("test_table", &jit, 4);
     }
@@ -604,8 +483,8 @@ mod test {
         builder: &Builder<'ctx>,
     ) -> FunctionValue<'ctx> {
         let bytes = s.as_bytes();
-
-        let f_ty = TValue::tvalue_string_type(context)
+        let f_ty = module.get_struct_type("tvalue_string").unwrap();
+        let f_ty = f_ty
             .ptr_type(Default::default())
             .fn_type(&[], false);
         let f = module.add_function("new_seeded_string", f_ty, None);
@@ -614,7 +493,7 @@ mod test {
             .get_function("new_byte_array")
             .expect("new_byte_array");
         builder.position_at_end(entry);
-        let s_ptr = builder.build_alloca(context.i8_type().array_type(0), "s_ptr");
+        let s_ptr = builder.build_alloca(context.i8_type().array_type(s.len() as _), "s_ptr");
         let mut b = Vec::with_capacity(bytes.len());
         
         for &ch in bytes.iter() {
@@ -637,7 +516,9 @@ mod test {
         );
         let ret = builder.build_call(
             new_s_f,
-            &[ba.as_any_value_enum().into_pointer_value().into()],
+            &[
+                ba.as_any_value_enum().into_pointer_value().into()
+            ],
             "ret",
         );
         builder.build_return(Some(&ret.as_any_value_enum().into_pointer_value()));

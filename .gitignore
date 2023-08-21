@@ -1,6 +1,12 @@
 /target
 /Cargo.lock
+# any c files used to generate LLVM IR
 /*.c
-/*.ll
-/.vscode
+# any rs file used to generate LLVM IR
 /*.rs
+# any LLVM IR files used for exploration
+/*.ll
+
+/.vscode
+# If the llvm-org libs are hosted in this directory, do not include them in the repo
+/llvm*
