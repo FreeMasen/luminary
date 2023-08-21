@@ -403,39 +403,39 @@ mod test {
         let context = Context::create();
         let module = TValue::gen_lib(&context);
         let tag_fun = module.get_function(TValue::GET_TAG_FN_NAME).unwrap();
-        // let new_nil_fun = module.get_function("tvalue_new_nil").unwrap();
-        // let new_bool_fun = module.get_function("tvalue_new_bool").unwrap();
-        // let new_num_fun = module.get_function("tvalue_new_number").unwrap();
+        let new_nil_fun = module.get_function("tvalue_new_nil").unwrap();
+        let new_bool_fun = module.get_function("tvalue_new_bool").unwrap();
+        let new_num_fun = module.get_function("tvalue_new_number").unwrap();
         let new_string_fun = module.get_function("tvalue_new_string").unwrap();
         // let new_table_fun = module.get_function("enum_TValue_new_table").unwrap();
         let builder = context.create_builder();
 
-        // build_test_tag_func(&context, &module, &builder, "test_nil", new_nil_fun, &[]);
-        // build_test_tag_func(
-        //     &context,
-        //     &module,
-        //     &builder,
-        //     "test_bool",
-        //     new_bool_fun,
-        //     &[context.bool_type().const_int(1, false).into()],
-        // );
-        // build_test_tag_func(
-        //     &context,
-        //     &module,
-        //     &builder,
-        //     "test_num",
-        //     new_num_fun,
-        //     &[context.f32_type().const_float(u32::MAX as _).into()],
-        // );
+        build_test_tag_func(&context, &module, &builder, "test_nil", new_nil_fun, &[]);
+        build_test_tag_func(
+            &context,
+            &module,
+            &builder,
+            "test_bool",
+            new_bool_fun,
+            &[context.bool_type().const_int(1, false).into()],
+        );
+        build_test_tag_func(
+            &context,
+            &module,
+            &builder,
+            "test_num",
+            new_num_fun,
+            &[context.f32_type().const_float(u32::MAX as _).into()],
+        );
         let s_ctor = build_string_ctor_func("hello world", &context, &module, &builder);
         build_test_tag_func(&context, &module, &builder, "test_string", s_ctor, &[]);
         eprintln!("{}", module.to_string());
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        // call_tag_test_fn("test_nil", &jit, 0);
-        // call_tag_test_fn("test_bool", &jit, 1);
-        // call_tag_test_fn("test_num", &jit, 2);
+        call_tag_test_fn("test_nil", &jit, 0);
+        call_tag_test_fn("test_bool", &jit, 1);
+        call_tag_test_fn("test_num", &jit, 2);
         call_tag_test_fn("test_string", &jit, 3);
         // call_tag_test_fn("test_table", &jit, 4);
     }
@@ -469,7 +469,9 @@ mod test {
     ) {
         type TestTagFunc = unsafe extern "C" fn() -> u8;
         println!("looking up {name}");
-        let func: JitFunction<TestTagFunc> = unsafe { jit.get_function(name).unwrap() };
+        let func: JitFunction<TestTagFunc> = unsafe { jit.get_function(name).unwrap_or_else(|e| {
+            panic!("{name}: {e}");
+        }) };
         println!("calling {name}");
         let val = unsafe { func.call() };
         println!("called {name} -> {val}");
