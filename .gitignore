@@ -10,3 +10,5 @@
 /.vscode
 # If the llvm-org libs are hosted in this directory, do not include them in the repo
 /llvm*
+# For debugging setting LUMINARY_WRITE_TEST_IR=1 will fill this directory with .ll files
+/test-ir

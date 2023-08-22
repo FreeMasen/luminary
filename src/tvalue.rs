@@ -73,7 +73,9 @@ impl TValue {
         tvalue_string.set_body(
             &[
                 context.i8_type().array_type(1).into(),
-                module.get_struct_type("byte_array").unwrap()
+                module
+                    .get_struct_type("byte_array")
+                    .unwrap()
                     .ptr_type(Default::default())
                     .into(),
             ],
@@ -147,7 +149,9 @@ impl TValue {
     ) {
         let f = module.add_function(
             "new_byte_array",
-            module.get_struct_type("byte_array").unwrap()
+            module
+                .get_struct_type("byte_array")
+                .unwrap()
                 .ptr_type(Default::default())
                 .fn_type(
                     &[
@@ -288,10 +292,9 @@ impl TValue {
         builder: &Builder<'ctx>,
     ) {
         let base_type = module.get_struct_type(Self::BASE_TYPE_NAME).unwrap();
-        let get_tag_ty = context.i8_type().fn_type(
-            &[base_type.ptr_type(0u16.into()).into()],
-            false,
-        );
+        let get_tag_ty = context
+            .i8_type()
+            .fn_type(&[base_type.ptr_type(0u16.into()).into()], false);
         let func = module.add_function(Self::GET_TAG_FN_NAME, get_tag_ty, None);
         let arg_ptr = func.get_param_iter().next().unwrap().into_pointer_value();
         arg_ptr.set_name("tagged_value");
@@ -318,7 +321,11 @@ impl TValue {
         builder: &Builder<'ctx>,
     ) {
         let get_tag_ty = context.bool_type().fn_type(
-            &[module.get_struct_type(Self::BASE_TYPE_NAME).unwrap().ptr_type(0u16.into()).into()],
+            &[module
+                .get_struct_type(Self::BASE_TYPE_NAME)
+                .unwrap()
+                .ptr_type(0u16.into())
+                .into()],
             false,
         );
         let func = module.add_function("getTValueValue_bool", get_tag_ty, None);
@@ -385,10 +392,13 @@ pub struct TableField {
 #[cfg(test)]
 mod test {
 
+    use std::path::PathBuf;
+
     use super::*;
     use inkwell::{
         execution_engine::{ExecutionEngine, JitFunction},
-        values::{BasicMetadataValueEnum, FunctionValue, ArrayValue},
+        types::AnyTypeEnum,
+        values::{ArrayValue, BasicMetadataValueEnum, FunctionValue, IntValue},
     };
 
     #[test]
@@ -429,7 +439,9 @@ mod test {
         );
         let s_ctor = build_string_ctor_func("hello world", &context, &module, &builder);
         build_test_tag_func(&context, &module, &builder, "test_string", s_ctor, &[]);
-        eprintln!("{}", module.to_string());
+        if std::env::var("LUMINARY_WRITE_TEST_IR").map(|v| v == "1").unwrap_or(false) {
+            write_test_module("tag_value", &module);
+        }
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
@@ -469,9 +481,11 @@ mod test {
     ) {
         type TestTagFunc = unsafe extern "C" fn() -> u8;
         println!("looking up {name}");
-        let func: JitFunction<TestTagFunc> = unsafe { jit.get_function(name).unwrap_or_else(|e| {
-            panic!("{name}: {e}");
-        }) };
+        let func: JitFunction<TestTagFunc> = unsafe {
+            jit.get_function(name).unwrap_or_else(|e| {
+                panic!("{name}: {e}");
+            })
+        };
         println!("calling {name}");
         let val = unsafe { func.call() };
         println!("called {name} -> {val}");
@@ -486,9 +500,7 @@ mod test {
     ) -> FunctionValue<'ctx> {
         let bytes = s.as_bytes();
         let f_ty = module.get_struct_type("tvalue_string").unwrap();
-        let f_ty = f_ty
-            .ptr_type(Default::default())
-            .fn_type(&[], false);
+        let f_ty = f_ty.ptr_type(Default::default()).fn_type(&[], false);
         let f = module.add_function("new_seeded_string", f_ty, None);
         let entry = context.append_basic_block(f.clone(), "entry");
         let ba_f = module
@@ -497,13 +509,12 @@ mod test {
         builder.position_at_end(entry);
         let s_ptr = builder.build_alloca(context.i8_type().array_type(s.len() as _), "s_ptr");
         let mut b = Vec::with_capacity(bytes.len());
-        
+
         for &ch in bytes.iter() {
             b.push(context.i8_type().const_int(ch as _, false))
         }
-        
-        let b = context.i8_type()
-            .const_array(b.as_slice());
+
+        let b = context.i8_type().const_array(b.as_slice());
         builder.build_store(s_ptr.clone(), b);
         let new_s_f = module
             .get_function("tvalue_new_string")
@@ -518,12 +529,94 @@ mod test {
         );
         let ret = builder.build_call(
             new_s_f,
-            &[
-                ba.as_any_value_enum().into_pointer_value().into()
-            ],
+            &[ba.as_any_value_enum().into_pointer_value().into()],
             "ret",
         );
         builder.build_return(Some(&ret.as_any_value_enum().into_pointer_value()));
         f
+    }
+
+    #[test]
+    fn check_truthiness() {
+        let context = Context::create();
+        let module = TValue::gen_lib(&context);
+        let builder = context.create_builder();
+        build_truthy_test(&context, &module, &builder, module.get_function("tvalue_new_nil").unwrap(), &[], "test_nil");
+        build_truthy_test(&context, &module, &builder,
+            module.get_function("tvalue_new_bool").unwrap(),
+            &[context.bool_type().const_int(1, false).into()],
+            "test_bool_true",
+        );
+        build_truthy_test(&context, &module, &builder,
+            module.get_function("tvalue_new_bool").unwrap(),
+            &[context.bool_type().const_int(0, false).into()],
+            "test_bool_false",
+        );
+        build_truthy_test(&context, &module, &builder,
+            module.get_function("tvalue_new_bool").unwrap(),
+            &[context.f32_type().const_float(0.11).into()],
+            "test_number",
+        );
+        if std::env::var("LUMINARY_WRITE_TEST_IR").map(|v| v == "1").unwrap_or(false) {
+            write_test_module("truthy", &module);
+        }
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_truthy_test("test_nil", &jit, false);
+        execute_truthy_test("test_bool_true", &jit, true);
+        execute_truthy_test("test_bool_false", &jit, false);
+        execute_truthy_test("test_number", &jit, true);
+    }
+
+    fn build_truthy_test<'ctx>(
+        context: &'ctx Context,
+        module: &Module<'ctx>,
+        builder: &Builder<'ctx>,
+        ctor_fn: FunctionValue<'ctx>,
+        ctor_args: &[BasicMetadataValueEnum<'ctx>],
+        name: &str,
+    ) {
+        let f = module.add_function(name, context.i8_type().fn_type(&[], false), None);
+        let entry = context.append_basic_block(f, "entry");
+        let is_bool = module.get_function("getTValueValue_bool").expect("getTValueValue_bool");
+        let args: Vec<_> = ctor_args.into_iter().cloned().map(BasicMetadataValueEnum::from).collect();
+        builder.position_at_end(entry);
+        let arg = builder.build_call(ctor_fn, args.as_slice(), "arg");
+        let ret = builder.build_call(
+            is_bool,
+            &[arg.as_any_value_enum().into_pointer_value().into()],
+            "ret",
+        );
+        builder.build_return(Some(&ret.as_any_value_enum().into_int_value()));
+    }
+
+    fn execute_truthy_test<'ctx>(
+        name: &'static str,
+        jit: &'ctx ExecutionEngine<'ctx>,
+        expected: bool,
+    ) {
+        type TestFunc = unsafe extern "C" fn() -> bool;
+        println!("looking up {name}");
+        let func: JitFunction<TestFunc> = unsafe {
+            jit.get_function(name).unwrap_or_else(|e| {
+                panic!("{name}: {e}");
+            })
+        };
+        println!("calling {name}");
+        let val = unsafe { func.call() };
+        println!("called {name} -> {val}");
+        assert_eq!(val, expected, "{name}");
+    }
+
+    fn write_test_module<'ctx>(name: &str, module: &Module<'ctx>) {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let path = path.join("test-ir");
+        if !path.exists() {
+            std::fs::create_dir_all(&path).ok();
+        }
+        let path = path.join(name);
+        
+        std::fs::write(path, module.to_string()).unwrap();
     }
 }
