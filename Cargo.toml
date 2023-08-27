@@ -7,8 +7,6 @@ edition = "2021"
 [dependencies]
 analisar = "0.2"
 inkwell = { version = "0.2", features = ["llvm16-0"] }
-thiserror = "1"
-hash-chain = "0.3"
 
 [dev-dependencies]
 insta = "1.31"
