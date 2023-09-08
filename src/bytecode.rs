@@ -1,15 +1,6 @@
+use analisar::ast::{Args, BinaryOperator, Expression, Field, Statement, UnaryOperator};
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
-
-use analisar::ast::{Args, BinaryOperator, Expression, Field, Statement, UnaryOperator};
-use inkwell::{
-    builder::Builder,
-    context::Context,
-    module::Module,
-    types::{BasicType, StructType},
-    values::AnyValue,
-    AddressSpace,
-};
 
 fn resolve_ids(stmts: Vec<Statement>) -> BTreeMap<String, DataType> {
     let mut known_ids = BTreeMap::new();
@@ -33,7 +24,17 @@ fn resolve_ids(stmts: Vec<Statement>) -> BTreeMap<String, DataType> {
                     known_ids.insert(id, dt);
                 }
             }
-            _ => todo!(),
+            Statement::Expression(inner) => {
+                try_type_args_from_expr(
+                    &inner,
+                    &mut Vec::new(),
+                    &mut BTreeMap::new(),
+                    &mut BTreeMap::new(),
+                    &mut known_ids,
+                );
+            }
+            Statement::ForIn(inner) => {}
+            var => todo!("{var:?}"),
         }
     }
     known_ids
@@ -196,7 +197,23 @@ fn try_type_args(
         Statement::Repeat { .. } => todo!(),
         Statement::If(_) => todo!(),
         Statement::For(_) => todo!(),
-        Statement::ForIn(_) => todo!(),
+        Statement::ForIn(stmt) => {
+            let mut old_shadows = Vec::<(String, DataType)>::new();
+            for expr in &stmt.exp_list {
+                try_type_args_from_expr(expr, args, arg_aliases, shadows, known_ids)
+            }
+            for n in &stmt.name_list.0 {
+                if let Some(old) = shadows.insert(n.name.to_string(), DataType::Any) {
+                    old_shadows.push((n.name.to_string(), old));
+                }
+            }
+            for stmt in &stmt.block.0 {
+                try_type_args(stmt, args, arg_aliases, shadows, known_ids)
+            }
+            for (n, old) in old_shadows {
+                shadows.insert(n, old);
+            }
+        }
         Statement::Function { .. } => todo!(),
         Statement::Return(rets) => {
             for expr in &rets.0 {
@@ -308,18 +325,18 @@ fn try_type_args_from_expr(
 fn expr_to_key(expr: &Expression, _known_ids: &BTreeMap<String, DataType>) -> Option<String> {
     #[allow(unused_variables, dead_code)]
     match expr {
-        Expression::Nil => todo!(),
-        Expression::False => todo!(),
-        Expression::True => todo!(),
-        Expression::Numeral(num) => todo!(),
+        Expression::Nil => todo!("nil"),
+        Expression::False => todo!("false"),
+        Expression::True => todo!("true"),
+        Expression::Numeral(num) => todo!("num: {num:?}"),
         Expression::LiteralString(lit) => Some(String::from_utf8_lossy(&lit.0).to_string()),
         Expression::Name(name) => Some(name.name.to_string()),
         Expression::VarArgs => Some("...".to_string()),
         Expression::FunctionDef(_) | Expression::TableCtor(_) => None,
-        Expression::BinOp { left, op, right } => todo!(),
-        Expression::UnaryOp { op, exp } => todo!(),
-        Expression::FuncCall(_) => todo!(),
-        Expression::Suffixed(_) => todo!(),
+        Expression::BinOp { left, op, right } => todo!("binop"),
+        Expression::UnaryOp { op, exp } => todo!("unop"),
+        Expression::FuncCall(_) => todo!("func-call"),
+        Expression::Suffixed(_) => todo!("suffixed"),
     }
 }
 
@@ -607,6 +624,10 @@ mod test {
         f = function(a, b)
             return a + b
         end
+        g
+        for h, a in pairs({}) do
+            g = 1
+        end
         "#;
         let mut parser = Parser::new(lua.as_bytes());
         let mut stmts = Vec::new();
@@ -642,5 +663,9 @@ mod test {
                 rets: Box::new(DataType::Number)
             })
         );
+        // assert_eq!(
+        //     vars.get("g").cloned().unwrap(),
+        //     DataType::Number
+        // );
     }
 }
