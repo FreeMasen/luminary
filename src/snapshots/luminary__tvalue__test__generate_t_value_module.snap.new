@@ -1,5 +1,6 @@
 ---
 source: src/tvalue.rs
+assertion_line: 801
 expression: module.to_string()
 ---
 ; ModuleID = 'std::tvalue'
@@ -123,17 +124,25 @@ nan:                                              ; preds = %entry
 
 define i1 @tvalue_add(ptr %lhs, ptr %rhs, ptr %out) {
 entry:
-  %lhs_is_num = call i1 @tvalue_is_number(ptr %lhs)
-  br i1 %lhs_is_num, label %lhsn, label %nan
+  %lhs_res_num = call %result_num @tvalue_get_number(ptr %lhs)
+  %lhs_res_ptr = alloca %result_num, align 8
+  store %result_num %lhs_res_num, ptr %lhs_res_ptr, align 4
+  %lhs_res_succ_ptr = getelementptr inbounds %result_num, ptr %lhs_res_ptr, i32 0, i32 0
+  %lhs_res_succ = load i1, ptr %lhs_res_succ_ptr, align 1
+  br i1 %lhs_res_succ, label %lhs_ian, label %nan
 
-nan:                                              ; preds = %lhsn, %entry
+nan:                                              ; preds = %lhs_ian, %entry
   ret i1 false
 
-lhsn:                                             ; preds = %entry
-  %rhs_is_num = call i1 @tvalue_is_number(ptr %rhs)
-  br i1 %rhs_is_num, label %rhsn, label %nan
+lhs_ian:                                          ; preds = %entry
+  %rhs_is_num = call %result_num @tvalue_get_number(ptr %rhs)
+  %rhs_res_ptr = alloca %result_num, align 8
+  store %result_num %rhs_is_num, ptr %rhs_res_ptr, align 4
+  %rhs_res_succ_ptr = getelementptr inbounds %result_num, ptr %lhs_res_ptr, i32 0, i32 0
+  %rhs_res_succ = load i1, ptr %rhs_res_succ_ptr, align 1
+  br i1 %rhs_res_succ, label %rhs_ian, label %nan
 
-rhsn:                                             ; preds = %lhsn
+rhs_ian:                                          ; preds = %lhs_ian
   %lhs_value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %lhs, i32 0, i32 1
   %lhs_value = load float, ptr %lhs_value_ptr, align 4
   %rhs_value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %rhs, i32 0, i32 1
