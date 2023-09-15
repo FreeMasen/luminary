@@ -1,3 +1,6 @@
+//! This module is for generating a "standard library" that outlines how all lua values
+//! will be represented in the LLVM IR, operator functions, etc.
+
 use std::collections::HashMap;
 
 use inkwell::{

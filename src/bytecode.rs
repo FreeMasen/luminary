@@ -1,3 +1,4 @@
+//! This module is for transforming/optimizing the lua AST
 use analisar::aware::ast::{
     Args, Block, ExpListItem, Expression, Field, FuncBody, FunctionCall, Statement, Table,
 };
