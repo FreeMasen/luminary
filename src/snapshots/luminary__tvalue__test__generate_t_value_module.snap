@@ -8,7 +8,6 @@ source_filename = "std::tvalue"
 %"std::tvalue::TValue" = type { i8, [15 x i8] }
 %"std::tvalue::TValue::Bool" = type { [15 x i8], i8 }
 %"std::tvalue::TValue::Number" = type { [8 x i8], float }
-%result_num = type { i1, float }
 
 declare i32 @printf(ptr, ...)
 
@@ -36,6 +35,9 @@ exit:                                             ; preds = %looptop
   %3 = call i32 (ptr, ...) @printf(ptr %cb)
   ret void
 }
+
+; Function Attrs: nounwind
+declare ptr @malloc(i32) #0
 
 define void @"std::tvalue_new_nil"(ptr %0) {
 entry:
@@ -106,7 +108,7 @@ entry:
   ret i1 %cmp
 }
 
-define %result_num @tvalue_get_number(ptr %0) {
+define float @tvalue_get_number(ptr %0) {
 entry:
   %is_num = call i1 @tvalue_is_number(ptr %0)
   br i1 %is_num, label %ian, label %nan
@@ -114,35 +116,35 @@ entry:
 ian:                                              ; preds = %entry
   %value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %0, i32 0, i32 1
   %value = load float, ptr %value_ptr, align 4
-  %mrv = insertvalue %result_num { i1 true, float poison }, float %value, 1
-  ret %result_num %mrv
+  ret float %value
 
 nan:                                              ; preds = %entry
-  ret %result_num zeroinitializer
+  ret float 0x7FF8000000000000
 }
 
 define i1 @tvalue_add(ptr %lhs, ptr %rhs, ptr %out) {
 entry:
   %lhs_is_num = call i1 @tvalue_is_number(ptr %lhs)
-  br i1 %lhs_is_num, label %lhsn, label %nan
+  br i1 %lhs_is_num, label %lhs_ian, label %nan
 
-nan:                                              ; preds = %lhsn, %entry
+nan:                                              ; preds = %lhs_ian, %entry
   ret i1 false
 
-lhsn:                                             ; preds = %entry
+lhs_ian:                                          ; preds = %entry
   %rhs_is_num = call i1 @tvalue_is_number(ptr %rhs)
-  br i1 %rhs_is_num, label %rhsn, label %nan
+  br i1 %rhs_is_num, label %rhs_ian, label %nan
 
-rhsn:                                             ; preds = %lhsn
-  %lhs_value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %lhs, i32 0, i32 1
-  %lhs_value = load float, ptr %lhs_value_ptr, align 4
-  %rhs_value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %rhs, i32 0, i32 1
-  %rhs_value = load float, ptr %rhs_value_ptr, align 4
+rhs_ian:                                          ; preds = %lhs_ian
+  %lhs_value = call float @tvalue_get_number(ptr %lhs)
+  %rhs_value = call float @tvalue_get_number(ptr %rhs)
   %out_value = fadd float %rhs_value, %lhs_value
+  call void @"std::tvalue_new_num"(ptr %out, float %out_value)
   %out_value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %out, i32 0, i32 1
   store float %out_value, ptr %out_value_ptr, align 4
   ret i1 true
 }
+
+attributes #0 = { nounwind }
 
 !llvm.dbg.cu = !{!0}
 

@@ -3,14 +3,10 @@ name = "luminary"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-members = [
-    "./tvalue"
-]
-
 [dependencies]
 analisar = "0.2"
 inkwell = { version = "0.2", features = ["llvm16-0"] }
+lex_lua = "0.1.9"
 
 [dev-dependencies]
 insta = "1.31"
