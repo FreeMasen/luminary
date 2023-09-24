@@ -99,6 +99,7 @@ pub(crate) mod tvalue_names {
         pub const SUB: &str = "std::tvalue::sub";
         pub const MUL: &str = "std::tvalue::mul";
         pub const DIV: &str = "std::tvalue::div";
+        pub const FLOOR_DIV: &str = "std::tvalue::floor_div";
         pub const POW: &str = "std::tvalue::pow";
         pub const MOD: &str = "std::tvalue::mod";
         pub const NEG: &str = "std::tvalue::NEG";
@@ -274,6 +275,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.add_tvalue_sub();
         self.add_tvalue_mul();
         self.add_tvalue_div();
+        self.add_tvalue_floor_div();
         self.add_tvalue_pow();
         self.add_tvalue_mod();
         self.add_tvalue_neg();
@@ -942,6 +944,22 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         });
     }
 
+    fn add_tvalue_floor_div(&self) {
+        let llvm_floor = Intrinsic::find("llvm.floor").expect("llvm.floor");
+        let floor_fn = llvm_floor.get_declaration(&self.module, &[self.context.f32_type().into()]).expect("llvm.floor-decl");
+        self.setup_binary_num_fn(tvalue_names::math::FLOOR_DIV, |lhs, rhs| {
+            let basic = self.builder
+                .build_float_div(
+                    lhs, rhs,
+                    "out_value",
+                );
+            let ret = self.builder.build_call(floor_fn, &[
+                basic.into()
+            ], "ret");
+            ret.as_any_value_enum().into_float_value()
+        });
+    }
+
     fn add_tvalue_mod(&self) {
         self.setup_binary_num_fn(tvalue_names::math::MOD, |lhs, rhs| {
             self.builder
@@ -1326,31 +1344,31 @@ mod test {
         execute_truthy_test("test_number", &jit, true);
     }
 
-    fn build_print<'ctx>(
-        context: &'ctx Context,
-        module: &Module<'ctx>,
-        builder: &Builder<'ctx>,
-        s: &str,
-    ) {
-        let printf = module.get_function("printf").expect("printf");
-        let s_ptr = builder.build_alloca(context.i8_type().array_type((s.len() + 2) as _), "s");
-        builder.build_store(
-            s_ptr,
-            context.i8_type().const_array(&s_to_arr_nl_z(context, s)),
-        );
-        builder.build_call(printf, &[s_ptr.into()], "");
-    }
+    // fn build_print<'ctx>(
+    //     context: &'ctx Context,
+    //     module: &Module<'ctx>,
+    //     builder: &Builder<'ctx>,
+    //     s: &str,
+    // ) {
+    //     let printf = module.get_function("printf").expect("printf");
+    //     let s_ptr = builder.build_alloca(context.i8_type().array_type((s.len() + 2) as _), "s");
+    //     builder.build_store(
+    //         s_ptr,
+    //         context.i8_type().const_array(&s_to_arr_nl_z(context, s)),
+    //     );
+    //     builder.build_call(printf, &[s_ptr.into()], "");
+    // }
 
-    fn s_to_arr_nl_z<'ctx>(context: &'ctx Context, s: &str) -> Vec<IntValue<'ctx>> {
-        s.as_bytes()
-            .into_iter()
-            .map(|&b| context.i8_type().const_int(b as _, false))
-            .chain([
-                context.i8_type().const_int(10, false), // \n
-                context.i8_type().const_int(0, false),  // \0
-            ])
-            .collect()
-    }
+    // fn s_to_arr_nl_z<'ctx>(context: &'ctx Context, s: &str) -> Vec<IntValue<'ctx>> {
+    //     s.as_bytes()
+    //         .into_iter()
+    //         .map(|&b| context.i8_type().const_int(b as _, false))
+    //         .chain([
+    //             context.i8_type().const_int(10, false), // \n
+    //             context.i8_type().const_int(0, false),  // \0
+    //         ])
+    //         .collect()
+    // }
 
     fn build_truthy_test<'ctx>(
         context: &'ctx Context,
@@ -1527,12 +1545,26 @@ mod test {
         let mut module_builder = TValueModuleBuilder::new(&context);
         let module = module_builder.gen_lib();
         let name1 = "test_happy_div";
-        build_binary_math_happy_test(&module_builder, &module, tvalue_names::math::MUL, name1);
+        build_binary_math_happy_test(&module_builder, &module, tvalue_names::math::DIV, name1);
         maybe_write_test_module("div", &module);
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l / r)
+    }
+
+    #[test]
+    fn test_num_floor_div() {
+        let context = Context::create();
+        let mut module_builder = TValueModuleBuilder::new(&context);
+        let module = module_builder.gen_lib();
+        let name1 = "test_happy_floor_div";
+        build_binary_math_happy_test(&module_builder, &module, tvalue_names::math::FLOOR_DIV, name1);
+        maybe_write_test_module("floor_div", &module);
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_happy_math_test(name1, &jit, 1.0, 3.0, |l, r| (l / r).floor())
     }
 
     #[test]

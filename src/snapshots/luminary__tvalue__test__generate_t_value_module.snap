@@ -183,6 +183,26 @@ nan:                                              ; preds = %entry
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare float @llvm.floor.f32(float) #1
+
+define i1 @"std::tvalue::floor_div"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %are_nums, label %ian, label %nan
+
+ian:                                              ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = fdiv float %lhs_value, %rhs_value
+  %ret = call float @llvm.floor.f32(float %out_value)
+  call void @"std::tvalue::new_num"(ptr %out, float %ret)
+  ret i1 true
+
+nan:                                              ; preds = %entry
+  ret i1 false
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare float @llvm.pow.f32(float, float) #1
 
 define i1 @"std::tvalue::pow"(ptr %lhs, ptr %rhs, ptr %out) {
