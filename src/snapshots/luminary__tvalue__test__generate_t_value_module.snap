@@ -60,7 +60,7 @@ entry:
   ret void
 }
 
-define void @"std::tvalue_new_num"(ptr %0, float %1) {
+define void @"std::tvalue::new_num"(ptr %0, float %1) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
   store i8 2, ptr %tag_ptr, align 1
@@ -71,16 +71,16 @@ entry:
   ret void
 }
 
-define i8 @getTValueTag(ptr %tagged_value) {
+define i8 @"std::tvalue::get_tag"(ptr %tagged_value) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %tagged_value, i32 0, i32 0
   %tag_val = load i8, ptr %tag_ptr, align 1
   ret i8 %tag_val
 }
 
-define i1 @getTValueValue_bool(ptr %tagged_value) {
+define i1 @"std::tvalue::is_truthy"(ptr %tagged_value) {
 entry:
-  %tag = call i8 @getTValueTag(ptr %tagged_value)
+  %tag = call i8 @"std::tvalue::get_tag"(ptr %tagged_value)
   %is_nil = icmp eq i8 %tag, 0
   br i1 %is_nil, label %is_nil1, label %is_not_nil
 
@@ -101,16 +101,16 @@ is_not_bool:                                      ; preds = %is_not_nil
   ret i1 true
 }
 
-define i1 @tvalue_is_number(ptr %0) {
+define i1 @"std::tvalue::is_number"(ptr %0) {
 entry:
-  %tag = call i8 @getTValueTag(ptr %0)
+  %tag = call i8 @"std::tvalue::get_tag"(ptr %0)
   %cmp = icmp eq i8 %tag, 2
   ret i1 %cmp
 }
 
-define float @tvalue_get_number(ptr %0) {
+define float @"std::tvalue::get_value_number"(ptr %0) {
 entry:
-  %is_num = call i1 @tvalue_is_number(ptr %0)
+  %is_num = call i1 @"std::tvalue::is_number"(ptr %0)
   br i1 %is_num, label %ian, label %nan
 
 ian:                                              ; preds = %entry
@@ -122,29 +122,138 @@ nan:                                              ; preds = %entry
   ret float 0x7FF8000000000000
 }
 
-define i1 @tvalue_add(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs) {
 entry:
-  %lhs_is_num = call i1 @tvalue_is_number(ptr %lhs)
+  %lhs_is_num = call i1 @"std::tvalue::is_number"(ptr %lhs)
   br i1 %lhs_is_num, label %lhs_ian, label %nan
 
 nan:                                              ; preds = %lhs_ian, %entry
   ret i1 false
 
 lhs_ian:                                          ; preds = %entry
-  %rhs_is_num = call i1 @tvalue_is_number(ptr %rhs)
+  %rhs_is_num = call i1 @"std::tvalue::is_number"(ptr %rhs)
   br i1 %rhs_is_num, label %rhs_ian, label %nan
 
 rhs_ian:                                          ; preds = %lhs_ian
-  %lhs_value = call float @tvalue_get_number(ptr %lhs)
-  %rhs_value = call float @tvalue_get_number(ptr %rhs)
-  %out_value = fadd float %rhs_value, %lhs_value
-  call void @"std::tvalue_new_num"(ptr %out, float %out_value)
-  %out_value_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %out, i32 0, i32 1
-  store float %out_value, ptr %out_value_ptr, align 4
+  ret i1 true
+}
+
+define i1 @"std::tvalue::add"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %both_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %both_nums, label %two_num, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+two_num:                                          ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = fadd float %lhs_value, %rhs_value
+  call void @"std::tvalue::new_num"(ptr %out, float %out_value)
+  ret i1 true
+}
+
+define i1 @"std::tvalue::sub"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %both_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %both_nums, label %two_num, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+two_num:                                          ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = fsub float %lhs_value, %rhs_value
+  call void @"std::tvalue::new_num"(ptr %out, float %out_value)
+  ret i1 true
+}
+
+define i1 @"std::tvalue::mul"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %both_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %both_nums, label %two_num, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+two_num:                                          ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = fmul float %lhs_value, %rhs_value
+  call void @"std::tvalue::new_num"(ptr %out, float %out_value)
+  ret i1 true
+}
+
+define i1 @"std::tvalue::div"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %both_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %both_nums, label %two_num, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+two_num:                                          ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = fdiv float %lhs_value, %rhs_value
+  call void @"std::tvalue::new_num"(ptr %out, float %out_value)
+  ret i1 true
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare float @llvm.pow.f32(float, float) #1
+
+define i1 @"std::tvalue::pow"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %both_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %both_nums, label %two_num, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+two_num:                                          ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = call float @llvm.pow.f32(float %lhs_value, float %rhs_value)
+  call void @"std::tvalue::new_num"(ptr %out, float %out_value)
+  ret i1 true
+}
+
+define i1 @"std::tvalue::mod"(ptr %lhs, ptr %rhs, ptr %out) {
+entry:
+  %both_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
+  br i1 %both_nums, label %two_num, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+two_num:                                          ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %lhs)
+  %rhs_value = call float @"std::tvalue::get_value_number"(ptr %rhs)
+  %out_value = frem float %lhs_value, %rhs_value
+  call void @"std::tvalue::new_num"(ptr %out, float %out_value)
+  ret i1 true
+}
+
+define i1 @"std::tvalue::NEG"(ptr %0, ptr %1) {
+entry:
+  %arg_ian = call i1 @"std::tvalue::is_number"(ptr %0)
+  br i1 %arg_ian, label %ian, label %nan
+
+nan:                                              ; preds = %entry
+  ret i1 false
+
+ian:                                              ; preds = %entry
+  %lhs_value = call float @"std::tvalue::get_value_number"(ptr %0)
+  %out_value = fneg float %lhs_value
+  call void @"std::tvalue::new_num"(ptr %1, float %out_value)
   ret i1 true
 }
 
 attributes #0 = { nounwind }
+attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 
 !llvm.dbg.cu = !{!0}
 

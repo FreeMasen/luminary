@@ -4,16 +4,19 @@
 use std::collections::HashMap;
 
 use inkwell::{
+    attributes::Attribute,
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
     debug_info::{
         AsDIScope, DIBasicType, DICompileUnit, DIFile, DIScope, DIType, DebugInfoBuilder,
     },
+    intrinsics::Intrinsic,
     module::Module,
-    types::{AnyType, BasicMetadataTypeEnum, BasicTypeEnum, FunctionType},
-    values::{AnyValue, BasicValue, FunctionValue, IntValue, PointerValue, BasicMetadataValueEnum},
-    AddressSpace, attributes::Attribute,
+    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType},
+    values::{
+        AnyValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue,
+    },
 };
 
 pub enum TValue {
@@ -32,12 +35,13 @@ pub struct TValueModuleBuilder<'ctx> {
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     debug_builder: DebugInfoBuilder<'ctx>,
+    #[allow(unused)]
     debug_compile_unit: DICompileUnit<'ctx>,
     debug_file: DIFile<'ctx>,
     global_scope: DIScope<'ctx>,
     di_types: DebugTypes<'ctx>,
 }
-
+#[allow(dead_code)]
 struct DebugTypes<'ctx> {
     bool_type: DIBasicType<'ctx>,
     i8_type: DIBasicType<'ctx>,
@@ -61,26 +65,50 @@ impl<'ctx> DebugTypes<'ctx> {
     }
 }
 
+pub(crate) mod tvalue_names {
+    pub const MODULE_NAME: &str = "std::tvalue";
+    pub mod types {
+        pub const BASE: &str = "std::tvalue::TValue";
+        pub const NIL: &str = "std::tvalue::TValue::Nil";
+        pub const BOOL: &str = "std::tvalue::TValue::Bool";
+        pub const NUMBER: &str = "std::tvalue::TValue::Number";
+        pub const STRING: &str = "std::tvalue::TValue::String";
+        // pub const TABLE: &str = "std::tvalue::TValue::Table";
+        pub const BYTE_ARRAY: &str = "std::tvalue::ByteArray";
+    }
+
+    pub mod ctors {
+        pub const NIL: &str = "std::tvalue_new_nil";
+        pub const BOOL: &str = "std::tvalue_new_bool";
+        pub const NUMBER: &str = "std::tvalue::new_num";
+        // pub const STRING: &str = "std::tvalue::new_str";
+        // pub const BYTE_ARRAY: &str = "std::tvalue::byte_array_new";
+    }
+
+    pub mod helper_funcs {
+        pub const GET_TAG: &str = "std::tvalue::get_tag";
+        pub const TRUTHY: &str = "std::tvalue::is_truthy";
+        pub const GET_VALUE_NUMBER: &str = "std::tvalue::get_value_number";
+        pub const IS_NUMBER: &str = "std::tvalue::is_number";
+        pub const IS_TWO_NUMBERS: &str = "std::tvalue::is_two_numbers";
+    }
+
+    pub mod math {
+        pub const ADD: &str = "std::tvalue::add";
+        pub const SUB: &str = "std::tvalue::sub";
+        pub const MUL: &str = "std::tvalue::mul";
+        pub const DIV: &str = "std::tvalue::div";
+        pub const POW: &str = "std::tvalue::pow";
+        pub const MOD: &str = "std::tvalue::mod";
+        pub const NEG: &str = "std::tvalue::NEG";
+    }
+}
+
 impl<'ctx> TValueModuleBuilder<'ctx> {
-    pub(crate) const MODULE_NAME: &str = "std::tvalue";
-    pub(crate) const BASE_TYPE_NAME: &str = "std::tvalue::TValue";
-    pub(crate) const NIL_TYPE_NAME: &str = "std::tvalue::TValue::Nil";
-    pub(crate) const BOOL_TYPE_NAME: &str = "std::tvalue::TValue::Bool";
-    pub(crate) const NUM_TYPE_NAME: &str = "std::tvalue::TValue::Number";
-    pub(crate) const STR_TYPE_NAME: &str = "std::tvalue::TValue::String";
-    pub(crate) const TBL_TYPE_NAME: &str = "std::tvalue::TValue::Table";
-    pub(crate) const BYTE_ARRAY_TYPE: &str = "std::tvalue::ByteArray";
-    pub(crate) const BASE_CTOR_NAME: &str = "std::tvalue_new";
-    pub(crate) const NIL_CTOR_NAME: &str = "std::tvalue_new_nil";
-    pub(crate) const BOOL_CTOR_NAME: &str = "std::tvalue_new_bool";
-    pub(crate) const NUM_CTOR_NAME: &str = "std::tvalue_new_num";
-    pub(crate) const STR_CTOR_NAME: &str = "std::tvalue_new_str";
-    pub(crate) const BARR_CTOR_NAME: &str = "std::byte_array_new";
-    pub(crate) const GET_TAG_FN_NAME: &str = "getTValueTag";
     const DATA_SIZE: u32 = 15;
 
     pub fn new(context: &'ctx Context) -> Self {
-        let module = context.create_module("std::tvalue");
+        let module = context.create_module(tvalue_names::MODULE_NAME);
         let (debug_builder, debug_compile_unit) = module.create_debug_info_builder(
             false,
             inkwell::debug_info::DWARFSourceLanguage::C,
@@ -98,7 +126,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             "",
             "",
         );
-        let di_file = debug_builder.create_file(&format!("{}.ll", Self::MODULE_NAME), "");
+        let di_file = debug_builder.create_file(&format!("{}.ll", tvalue_names::MODULE_NAME), "");
         let di_scope = di_file.as_debug_info_scope();
         let di_types = DebugTypes::new(&debug_builder);
         Self {
@@ -119,13 +147,14 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             self.context
                 .i8_type()
                 .ptr_type(Default::default())
-                .fn_type(&[
-                    self.context.i32_type().into()
-                ], false),
+                .fn_type(&[self.context.i32_type().into()], false),
             None,
         );
         let kind_id = Attribute::get_named_enum_kind_id("nounwind");
-        malloc.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_enum_attribute(kind_id, 0));
+        malloc.add_attribute(
+            inkwell::attributes::AttributeLoc::Function,
+            self.context.create_enum_attribute(kind_id, 0),
+        );
     }
 
     #[cfg(test)]
@@ -143,7 +172,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             self.context.void_type().fn_type(
                 &[self
                     .module
-                    .get_struct_type(Self::BASE_TYPE_NAME)
+                    .get_struct_type(tvalue_names::types::BASE)
                     .unwrap()
                     .ptr_type(Default::default())
                     .into()],
@@ -236,7 +265,14 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.add_get_value_bool();
         self.add_tvalue_is_number();
         self.add_tvalue_get_number();
+        self.add_tvalue_check_two_numbers();
         self.add_tvalue_add();
+        self.add_tvalue_sub();
+        self.add_tvalue_mul();
+        self.add_tvalue_div();
+        self.add_tvalue_pow();
+        self.add_tvalue_mod();
+        self.add_tvalue_neg();
         self.debug_builder.finalize();
         self.module.verify().unwrap_or_else(|e| {
             eprintln!("{}", self.module.to_string());
@@ -252,30 +288,30 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     }
 
     fn add_init_nil(&self) {
-        self.add_new_init(Self::NIL_TYPE_NAME, None, Self::NIL_CTOR_NAME, 0);
+        self.add_new_init(tvalue_names::types::NIL, None, tvalue_names::ctors::NIL, 0);
     }
 
     fn add_init_bool(&self) {
         self.add_new_init(
-            Self::BOOL_TYPE_NAME,
+            tvalue_names::types::BOOL,
             Some(self.context.bool_type().into()),
-            Self::BOOL_CTOR_NAME,
+            tvalue_names::ctors::BOOL,
             1,
         );
     }
 
     fn add_init_number(&self) {
         self.add_new_init(
-            Self::NUM_TYPE_NAME,
+            tvalue_names::types::NUMBER,
             Some(self.context.f32_type().into()),
-            Self::NUM_CTOR_NAME,
+            tvalue_names::ctors::NUMBER,
             2,
         );
     }
 
     fn gen_types(&mut self) {
         self.gen_type(
-            Self::BASE_TYPE_NAME,
+            tvalue_names::types::BASE,
             &[
                 self.context.i8_type().into(),
                 self.context.i8_type().array_type(Self::DATA_SIZE).into(),
@@ -283,7 +319,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
         let base_type = self.debug_builder.create_struct_type(
             self.global_scope,
-            Self::BASE_TYPE_NAME,
+            tvalue_names::types::BASE,
             self.debug_file,
             3,
             8 * 16,
@@ -303,13 +339,13 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             0,
             None,
-            Self::BASE_TYPE_NAME,
+            tvalue_names::types::BASE,
         );
         self.di_types
             .others
-            .insert(Self::BASE_TYPE_NAME.into(), base_type.as_type());
+            .insert(tvalue_names::types::BASE.into(), base_type.as_type());
         self.gen_type(
-            Self::NIL_TYPE_NAME,
+            tvalue_names::types::NIL,
             &[
                 self.context.i8_type().into(),
                 self.context.i8_type().array_type(Self::DATA_SIZE).into(),
@@ -318,7 +354,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
 
         let nil_variant = self.debug_builder.create_struct_type(
             self.global_scope,
-            Self::NIL_TYPE_NAME,
+            tvalue_names::types::NIL,
             self.debug_file,
             3,
             8 * 16,
@@ -338,13 +374,13 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             0,
             None,
-            Self::NIL_TYPE_NAME,
+            tvalue_names::types::NIL,
         );
         self.di_types
             .others
-            .insert(Self::NIL_TYPE_NAME.into(), nil_variant.as_type());
+            .insert(tvalue_names::types::NIL.into(), nil_variant.as_type());
         self.gen_type(
-            Self::BOOL_TYPE_NAME,
+            tvalue_names::types::BOOL,
             &[
                 self.context.i8_type().array_type(Self::DATA_SIZE).into(),
                 self.context.i8_type().into(),
@@ -352,7 +388,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
         let bool_variant = self.debug_builder.create_struct_type(
             self.global_scope,
-            Self::BOOL_TYPE_NAME,
+            tvalue_names::types::BOOL,
             self.debug_file,
             3,
             8 * 16,
@@ -372,13 +408,13 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             0,
             None,
-            Self::BOOL_TYPE_NAME,
+            tvalue_names::types::BOOL,
         );
         self.di_types
             .others
-            .insert(Self::BOOL_TYPE_NAME.into(), bool_variant.as_type());
+            .insert(tvalue_names::types::BOOL.into(), bool_variant.as_type());
         self.gen_type(
-            Self::NUM_TYPE_NAME,
+            tvalue_names::types::NUMBER,
             &[
                 self.context
                     .i8_type()
@@ -389,7 +425,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
         let num_variant = self.debug_builder.create_struct_type(
             self.global_scope,
-            Self::NUM_TYPE_NAME,
+            tvalue_names::types::NUMBER,
             self.debug_file,
             3,
             8 * 16,
@@ -402,13 +438,13 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             0,
             None,
-            Self::NUM_TYPE_NAME,
+            tvalue_names::types::NUMBER,
         );
         self.di_types
             .others
-            .insert(Self::NUM_TYPE_NAME.into(), num_variant.as_type());
+            .insert(tvalue_names::types::NUMBER.into(), num_variant.as_type());
         self.gen_type(
-            Self::BYTE_ARRAY_TYPE,
+            tvalue_names::types::BYTE_ARRAY,
             &[
                 self.context.i32_type().into(),
                 self.context.i8_type().ptr_type(Default::default()).into(),
@@ -416,7 +452,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
         let byte_array_type = self.debug_builder.create_struct_type(
             self.global_scope,
-            Self::BYTE_ARRAY_TYPE,
+            tvalue_names::types::BYTE_ARRAY,
             self.debug_file,
             3,
             8 * 16,
@@ -429,13 +465,14 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             0,
             None,
-            Self::BYTE_ARRAY_TYPE,
+            tvalue_names::types::BYTE_ARRAY,
         );
-        self.di_types
-            .others
-            .insert(Self::BYTE_ARRAY_TYPE.into(), byte_array_type.as_type());
+        self.di_types.others.insert(
+            tvalue_names::types::BYTE_ARRAY.into(),
+            byte_array_type.as_type(),
+        );
         self.gen_type(
-            Self::STR_TYPE_NAME,
+            tvalue_names::types::STRING,
             &[
                 self.context.i8_type().into(),
                 // ptr is fully opaque so using the i8_type() here doesn't matter
@@ -444,7 +481,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
         let string_variant = self.debug_builder.create_struct_type(
             self.global_scope,
-            Self::STR_TYPE_NAME,
+            tvalue_names::types::STRING,
             self.debug_file,
             3,
             8 * 16,
@@ -465,16 +502,16 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             0,
             None,
-            Self::STR_TYPE_NAME,
+            tvalue_names::types::STRING,
         );
         self.di_types
             .others
-            .insert(Self::STR_TYPE_NAME.into(), string_variant.as_type());
+            .insert(tvalue_names::types::STRING.into(), string_variant.as_type());
         self.di_types.others.insert(
-            Self::STR_TYPE_NAME.into(),
+            tvalue_names::types::STRING.into(),
             self.debug_builder
                 .create_pointer_type(
-                    &format!("{}_ptr", Self::BASE_TYPE_NAME),
+                    &format!("{}_ptr", tvalue_names::types::BASE),
                     base_type.as_type(),
                     8 * 16,
                     8,
@@ -503,9 +540,8 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
 
         let enum_base_ty = self
             .module
-            .get_struct_type(Self::BASE_TYPE_NAME)
+            .get_struct_type(tvalue_names::types::BASE)
             .expect("base struct name to be defined");
-        // let base_ctor = self.module.get_function(Self::BASE_CTOR_NAME).unwrap();
         let mut ctor_args: Vec<BasicMetadataTypeEnum> =
             vec![enum_base_ty.ptr_type(Default::default()).into()];
 
@@ -514,14 +550,16 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         }
         let f = self.context.void_type().fn_type(&ctor_args, false);
         let f = self.module.add_function(init_name, f, None);
-        let entry = self.context.append_basic_block(f.clone(), "entry");
+        let entry = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(entry);
         let arg1 = f.get_first_param().expect("1 arg");
 
         let tag_ptr = self
             .builder
             .build_struct_gep(
-                self.module.get_struct_type(Self::BASE_TYPE_NAME).unwrap(),
+                self.module
+                    .get_struct_type(tvalue_names::types::BASE)
+                    .unwrap(),
                 arg1.as_any_value_enum().into_pointer_value(),
                 0,
                 "tag_ptr",
@@ -541,7 +579,9 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             let data_ptr = self
                 .builder
                 .build_struct_gep(
-                    self.module.get_struct_type(Self::BASE_TYPE_NAME).unwrap(),
+                    self.module
+                        .get_struct_type(tvalue_names::types::BASE)
+                        .unwrap(),
                     arg1.into_pointer_value(),
                     1,
                     "data_ptr",
@@ -575,14 +615,17 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     }
 
     fn add_get_tag_function(&self) {
-        let base_type = self.module.get_struct_type(Self::BASE_TYPE_NAME).unwrap();
+        let base_type = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
         let get_tag_ty = self
             .context
             .i8_type()
             .fn_type(&[base_type.ptr_type(0u16.into()).into()], false);
         let func = self
             .module
-            .add_function(Self::GET_TAG_FN_NAME, get_tag_ty, None);
+            .add_function(tvalue_names::helper_funcs::GET_TAG, get_tag_ty, None);
         let arg_ptr = func.get_param_iter().next().unwrap().into_pointer_value();
         arg_ptr.set_name("tagged_value");
         let entry_block = self.context.append_basic_block(func, "entry");
@@ -605,27 +648,27 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     }
 
     fn add_get_value_bool(&self) {
-        let get_tag_ty = self.context.bool_type().fn_type(
+        let fn_ty = self.context.bool_type().fn_type(
             &[self
                 .module
-                .get_struct_type(Self::BASE_TYPE_NAME)
+                .get_struct_type(tvalue_names::types::BASE)
                 .unwrap()
-                .ptr_type(0u16.into())
+                .ptr_type(Default::default())
                 .into()],
             false,
         );
         let func = self
             .module
-            .add_function("getTValueValue_bool", get_tag_ty, None);
+            .add_function(tvalue_names::helper_funcs::TRUTHY, fn_ty, None);
         let arg_ptr = func.get_param_iter().next().unwrap().into_pointer_value();
         arg_ptr.set_name("tagged_value");
-        let entry_block = self.context.append_basic_block(func.clone(), "entry");
-        self.builder.position_at_end(entry_block.clone());
+        let entry_block = self.context.append_basic_block(func, "entry");
+        self.builder.position_at_end(entry_block);
 
         let get_tag_func = self
             .module
-            .get_function(Self::GET_TAG_FN_NAME)
-            .expect("getTagFn");
+            .get_function(tvalue_names::helper_funcs::GET_TAG)
+            .expect(tvalue_names::helper_funcs::GET_TAG);
         let call = self
             .builder
             .build_call(get_tag_func, &[arg_ptr.into()], "tag");
@@ -636,37 +679,33 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             self.context.i8_type().const_int(0, false),
             "is_nil",
         );
-        let is_nil_block = self.context.append_basic_block(func.clone(), "is_nil");
-        let is_not_nil_block = self.context.append_basic_block(func.clone(), "is_not_nil");
-        self.builder.build_conditional_branch(
-            is_nil.clone(),
-            is_nil_block.clone(),
-            is_not_nil_block,
-        );
-        self.builder.position_at_end(is_nil_block.clone());
+        let is_nil_block = self.context.append_basic_block(func, "is_nil");
+        let is_not_nil_block = self.context.append_basic_block(func, "is_not_nil");
+        self.builder
+            .build_conditional_branch(is_nil, is_nil_block, is_not_nil_block);
+        self.builder.position_at_end(is_nil_block);
         self.builder
             .build_return(Some(&self.context.bool_type().const_int(0, false)));
-        self.builder.position_at_end(is_not_nil_block.clone());
+        self.builder.position_at_end(is_not_nil_block);
         let is_bool = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
             cmp_tag.into_int_value(),
             self.context.i8_type().const_int(1, false),
             "is_bool",
         );
-        let is_bool_block = self.context.append_basic_block(func.clone(), "is_bool");
+        let is_bool_block = self.context.append_basic_block(func, "is_bool");
         let is_not_bool_block = self.context.append_basic_block(func, "is_not_bool");
-        self.builder.build_conditional_branch(
-            is_bool,
-            is_bool_block.clone(),
-            is_not_bool_block.clone(),
-        );
-        self.builder.position_at_end(is_not_bool_block.clone());
+        self.builder
+            .build_conditional_branch(is_bool, is_bool_block, is_not_bool_block);
+        self.builder.position_at_end(is_not_bool_block);
         self.builder
             .build_return(Some(&self.context.bool_type().const_int(1, false)));
         self.builder.position_at_end(is_bool_block);
         let gep = unsafe {
             self.builder.build_in_bounds_gep(
-                self.module.get_struct_type(Self::BOOL_TYPE_NAME).unwrap(),
+                self.module
+                    .get_struct_type(tvalue_names::types::BOOL)
+                    .unwrap(),
                 arg_ptr,
                 &[
                     self.context.i32_type().const_int(0, false),
@@ -701,13 +740,20 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     }
 
     fn add_tvalue_is_number(&self) {
-        let tvalue = self.module.get_struct_type(Self::BASE_TYPE_NAME).unwrap();
-        let get_tag = self.module.get_function(Self::GET_TAG_FN_NAME).unwrap();
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
+        let get_tag = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_TAG)
+            .unwrap();
         let is_num_ty = self
             .context
             .bool_type()
             .fn_type(&[tvalue.ptr_type(Default::default()).into()], false);
-        let (is_num_fn, _entry) = self.add_function("tvalue_is_number", is_num_ty);
+        let (is_num_fn, _entry) =
+            self.add_function(tvalue_names::helper_funcs::IS_NUMBER, is_num_ty);
         let tag = self.builder.build_call(
             get_tag,
             &[is_num_fn
@@ -727,15 +773,21 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     }
 
     fn add_tvalue_get_number(&self) {
-        let tvalue = self.module.get_struct_type(Self::BASE_TYPE_NAME).unwrap();
-        let tvalue_number = self.module.get_struct_type(Self::NUM_TYPE_NAME).unwrap();
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
+        let tvalue_number = self
+            .module
+            .get_struct_type(tvalue_names::types::NUMBER)
+            .unwrap();
         let is_num_fn = self
             .module
-            .get_function("tvalue_is_number")
-            .expect("is_number");
+            .get_function(tvalue_names::helper_funcs::IS_NUMBER)
+            .expect(tvalue_names::helper_funcs::IS_NUMBER);
         let ret_ty = self.context.f32_type();
         let (get_num_fn, _entry) = self.add_function(
-            "tvalue_get_number",
+            tvalue_names::helper_funcs::GET_VALUE_NUMBER,
             ret_ty.fn_type(&[tvalue.ptr_type(Default::default()).into()], false),
         );
         let arg = get_num_fn.get_first_param().expect("1 param");
@@ -763,25 +815,422 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     }
 
     fn add_tvalue_add(&self) {
-        let tvalue = self.module.get_struct_type(Self::BASE_TYPE_NAME).unwrap();
-        let tvalue_number = self.module.get_struct_type(Self::NUM_TYPE_NAME).unwrap();
-        let is_num_fn = self
+        let two_nums_fn = self
             .module
-            .get_function("tvalue_is_number")
-            .expect("tvalue_is_number");
+            .get_function(tvalue_names::helper_funcs::IS_TWO_NUMBERS)
+            .expect(tvalue_names::helper_funcs::IS_TWO_NUMBERS);
         let get_num_fn = self
             .module
-            .get_function("tvalue_get_number")
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
             .expect("tvalue_get_number");
         let init_num_fn = self
             .module
-            .get_function(Self::NUM_CTOR_NAME)
-            .expect(Self::NUM_CTOR_NAME);
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let (f, lhs, rhs, out) = self.setup_math_fn(tvalue_names::math::ADD);
+        let nan = self.context.append_basic_block(f, "nan");
+        let two_num = self.context.append_basic_block(f, "two_num");
+        let both_nums =
+            self.builder
+                .build_call(two_nums_fn, &[lhs.into(), rhs.into()], "both_nums");
+
+        self.builder.build_conditional_branch(
+            both_nums.as_any_value_enum().into_int_value(),
+            two_num,
+            nan,
+        );
+        self.builder.position_at_end(two_num);
+        let lhs_value =
+            self.builder
+                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
+        let rhs_value =
+            self.builder
+                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
+        let out_value = self.builder.build_float_add(
+            lhs_value.as_any_value_enum().into_float_value(),
+            rhs_value.as_any_value_enum().into_float_value(),
+            "out_value",
+        );
+        self.builder.build_call(
+            init_num_fn,
+            &[out.as_basic_value_enum().into(), out_value.into()],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn setup_math_fn(
+        &self,
+        name: &str,
+    ) -> (
+        FunctionValue<'ctx>,
+        BasicValueEnum<'ctx>,
+        BasicValueEnum<'ctx>,
+        BasicValueEnum<'ctx>,
+    ) {
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
         let (f, _entry) = self.add_function(
-            "tvalue_add",
+            name,
             self.context.bool_type().fn_type(
                 &[
                     tvalue.ptr_type(Default::default()).into(),
+                    tvalue.ptr_type(Default::default()).into(),
+                    tvalue.ptr_type(Default::default()).into(),
+                ],
+                false,
+            ),
+        );
+        let params = f.get_params();
+        let lhs = *params.get(0).expect("1 param");
+        lhs.set_name("lhs");
+        let rhs = *params.get(1).expect("2 params");
+        rhs.set_name("rhs");
+        let out = *params.get(2).expect("3 params");
+        out.set_name("out");
+        (f, lhs, rhs, out)
+    }
+
+    fn add_tvalue_sub(&self) {
+        let two_nums_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_TWO_NUMBERS)
+            .expect(tvalue_names::helper_funcs::IS_TWO_NUMBERS);
+        let get_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .expect(tvalue_names::helper_funcs::GET_VALUE_NUMBER);
+        let init_num_fn = self
+            .module
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let (f, lhs, rhs, out) = self.setup_math_fn(tvalue_names::math::SUB);
+        let nan = self.context.append_basic_block(f, "nan");
+        let two_num = self.context.append_basic_block(f, "two_num");
+        let both_nums =
+            self.builder
+                .build_call(two_nums_fn, &[lhs.into(), rhs.into()], "both_nums");
+
+        self.builder.build_conditional_branch(
+            both_nums.as_any_value_enum().into_int_value(),
+            two_num,
+            nan,
+        );
+        self.builder.position_at_end(two_num);
+        let lhs_value =
+            self.builder
+                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
+        let rhs_value =
+            self.builder
+                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
+        let out_value = self.builder.build_float_sub(
+            lhs_value.as_any_value_enum().into_float_value(),
+            rhs_value.as_any_value_enum().into_float_value(),
+            "out_value",
+        );
+        self.builder.build_call(
+            init_num_fn,
+            &[out.as_basic_value_enum().into(), out_value.into()],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_tvalue_mul(&self) {
+        let two_nums_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_TWO_NUMBERS)
+            .expect(tvalue_names::helper_funcs::IS_TWO_NUMBERS);
+        let get_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .expect(tvalue_names::helper_funcs::GET_VALUE_NUMBER);
+        let init_num_fn = self
+            .module
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let (f, lhs, rhs, out) = self.setup_math_fn(tvalue_names::math::MUL);
+        let nan = self.context.append_basic_block(f, "nan");
+        let two_num = self.context.append_basic_block(f, "two_num");
+        let both_nums =
+            self.builder
+                .build_call(two_nums_fn, &[lhs.into(), rhs.into()], "both_nums");
+
+        self.builder.build_conditional_branch(
+            both_nums.as_any_value_enum().into_int_value(),
+            two_num,
+            nan,
+        );
+        self.builder.position_at_end(two_num);
+        let lhs_value =
+            self.builder
+                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
+        let rhs_value =
+            self.builder
+                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
+        let out_value = self.builder.build_float_mul(
+            lhs_value.as_any_value_enum().into_float_value(),
+            rhs_value.as_any_value_enum().into_float_value(),
+            "out_value",
+        );
+        self.builder.build_call(
+            init_num_fn,
+            &[out.as_basic_value_enum().into(), out_value.into()],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_tvalue_div(&self) {
+        let two_nums_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_TWO_NUMBERS)
+            .expect(tvalue_names::helper_funcs::IS_TWO_NUMBERS);
+        let get_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .expect(tvalue_names::helper_funcs::GET_VALUE_NUMBER);
+        let init_num_fn = self
+            .module
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let (f, lhs, rhs, out) = self.setup_math_fn(tvalue_names::math::DIV);
+        let nan = self.context.append_basic_block(f, "nan");
+        let two_num = self.context.append_basic_block(f, "two_num");
+        let both_nums =
+            self.builder
+                .build_call(two_nums_fn, &[lhs.into(), rhs.into()], "both_nums");
+
+        self.builder.build_conditional_branch(
+            both_nums.as_any_value_enum().into_int_value(),
+            two_num,
+            nan,
+        );
+        self.builder.position_at_end(two_num);
+        let lhs_value =
+            self.builder
+                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
+        let rhs_value =
+            self.builder
+                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
+        let out_value = self.builder.build_float_div(
+            lhs_value.as_any_value_enum().into_float_value(),
+            rhs_value.as_any_value_enum().into_float_value(),
+            "out_value",
+        );
+        self.builder.build_call(
+            init_num_fn,
+            &[out.as_basic_value_enum().into(), out_value.into()],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_tvalue_mod(&self) {
+        let two_nums_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_TWO_NUMBERS)
+            .expect(tvalue_names::helper_funcs::IS_TWO_NUMBERS);
+        let get_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .expect(tvalue_names::helper_funcs::GET_VALUE_NUMBER);
+        let init_num_fn = self
+            .module
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let (f, lhs, rhs, out) = self.setup_math_fn(tvalue_names::math::MOD);
+        let nan = self.context.append_basic_block(f, "nan");
+        let two_num = self.context.append_basic_block(f, "two_num");
+        let both_nums =
+            self.builder
+                .build_call(two_nums_fn, &[lhs.into(), rhs.into()], "both_nums");
+
+        self.builder.build_conditional_branch(
+            both_nums.as_any_value_enum().into_int_value(),
+            two_num,
+            nan,
+        );
+        self.builder.position_at_end(two_num);
+        let lhs_value =
+            self.builder
+                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
+        let rhs_value =
+            self.builder
+                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
+        let out_value = self.builder.build_float_rem(
+            lhs_value.as_any_value_enum().into_float_value(),
+            rhs_value.as_any_value_enum().into_float_value(),
+            "out_value",
+        );
+        self.builder.build_call(
+            init_num_fn,
+            &[out.as_basic_value_enum().into(), out_value.into()],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_tvalue_neg(&self) {
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
+        let is_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_NUMBER)
+            .expect(tvalue_names::helper_funcs::IS_NUMBER);
+        let get_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .expect(tvalue_names::helper_funcs::GET_VALUE_NUMBER);
+        let init_num_fn = self
+            .module
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let f = self.module.add_function(
+            tvalue_names::math::NEG,
+            self.context.bool_type().fn_type(
+                &[
+                    tvalue.ptr_type(Default::default()).into(),
+                    tvalue.ptr_type(Default::default()).into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        let arg = f.get_first_param().expect("1 arg");
+        let out = f.get_last_param().expect("2 args");
+        let entry = self.context.append_basic_block(f, "entry");
+        let nan = self.context.append_basic_block(f, "nan");
+        let ian = self.context.append_basic_block(f, "ian");
+        self.builder.position_at_end(entry);
+        let arg_ian = self.builder.build_call(is_num_fn, &[arg.into()], "arg_ian");
+
+        self.builder.build_conditional_branch(
+            arg_ian.as_any_value_enum().into_int_value(),
+            ian,
+            nan,
+        );
+        self.builder.position_at_end(ian);
+        let value =
+            self.builder
+                .build_call(get_num_fn, &[arg.as_basic_value_enum().into()], "lhs_value");
+
+        let out_value = self
+            .builder
+            .build_float_neg(value.as_any_value_enum().into_float_value(), "out_value");
+        self.builder.build_call(
+            init_num_fn,
+            &[out.as_basic_value_enum().into(), out_value.into()],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_tvalue_pow(&self) {
+        let two_nums_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_TWO_NUMBERS)
+            .expect(tvalue_names::helper_funcs::IS_TWO_NUMBERS);
+        let get_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .expect(tvalue_names::helper_funcs::GET_VALUE_NUMBER);
+        let init_num_fn = self
+            .module
+            .get_function(tvalue_names::ctors::NUMBER)
+            .expect(tvalue_names::ctors::NUMBER);
+        let pow_intrinsic = Intrinsic::find("llvm.pow.f32").expect("llvm.pow.f32");
+        let pow_intrinsic_fn = pow_intrinsic
+            .get_declaration(
+                &self.module,
+                &[self.context.f32_type().as_basic_type_enum()],
+            )
+            .unwrap();
+        let (f, lhs, rhs, out) = self.setup_math_fn(tvalue_names::math::POW);
+        let nan = self.context.append_basic_block(f, "nan");
+        let two_num = self.context.append_basic_block(f, "two_num");
+        let both_nums =
+            self.builder
+                .build_call(two_nums_fn, &[lhs.into(), rhs.into()], "both_nums");
+
+        self.builder.build_conditional_branch(
+            both_nums.as_any_value_enum().into_int_value(),
+            two_num,
+            nan,
+        );
+        self.builder.position_at_end(two_num);
+        let lhs_value =
+            self.builder
+                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
+        let rhs_value =
+            self.builder
+                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
+
+        let out_value = self.builder.build_call(
+            pow_intrinsic_fn,
+            &[
+                lhs_value.as_any_value_enum().into_float_value().into(),
+                rhs_value.as_any_value_enum().into_float_value().into(),
+            ],
+            "out_value",
+        );
+        self.builder.build_call(
+            init_num_fn,
+            &[
+                out.as_basic_value_enum().into(),
+                out_value.as_any_value_enum().into_float_value().into(),
+            ],
+            "",
+        );
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nan);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_tvalue_check_two_numbers(&self) {
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .expect(tvalue_names::types::BASE);
+        let is_num_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_NUMBER)
+            .expect(tvalue_names::helper_funcs::IS_NUMBER);
+
+        let (f, _entry) = self.add_function(
+            tvalue_names::helper_funcs::IS_TWO_NUMBERS,
+            self.context.bool_type().fn_type(
+                &[
                     tvalue.ptr_type(Default::default()).into(),
                     tvalue.ptr_type(Default::default()).into(),
                 ],
@@ -794,8 +1243,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         lhs.set_name("lhs");
         let rhs = params.get(1).expect("2 params");
         rhs.set_name("rhs");
-        let out = params.get(2).expect("3 params");
-        out.set_name("out");
         let nan = self.context.append_basic_block(f, "nan");
         let lhs_ian = self.context.append_basic_block(f, "lhs_ian");
         let rhs_ian = self.context.append_basic_block(f, "rhs_ian");
@@ -819,48 +1266,55 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             nan,
         );
         self.builder.position_at_end(rhs_ian);
-        let lhs_value =
-            self.builder
-                .build_call(get_num_fn, &[lhs.as_basic_value_enum().into()], "lhs_value");
-        let rhs_value =
-            self.builder
-                .build_call(get_num_fn, &[rhs.as_basic_value_enum().into()], "rhs_value");
-        let out_value = self.builder.build_float_add(
-            rhs_value.as_any_value_enum().into_float_value(),
-            lhs_value.as_any_value_enum().into_float_value(),
-            "out_value",
-        );
-        self.builder
-            .build_call(init_num_fn, &[
-                out.as_basic_value_enum().into(),
-                out_value.into()
-            ], "");
-        let out_value_ptr = self
-            .builder
-            .build_struct_gep(tvalue_number, out.into_pointer_value(), 1, "out_value_ptr")
-            .expect("gep");
-        self.builder.build_store(out_value_ptr, out_value);
+
         self.builder
             .build_return(Some(&self.context.bool_type().const_int(1, false)));
         self.builder.position_at_end(nan);
+
         self.builder
             .build_return(Some(&self.context.bool_type().const_int(0, false)));
     }
 
     pub fn emit_new_number(&self, name: &str, init: BasicMetadataValueEnum) -> PointerValue<'ctx> {
-        let ty = self.module.get_struct_type(Self::NUM_TYPE_NAME).unwrap();
-        let ctor = self.module.get_function(Self::NUM_CTOR_NAME).unwrap();
-        let v = self.builder.build_alloca(ty, name);
-        self.builder.build_call(
-            ctor,
-            &[
-                v.as_basic_value_enum().into(),
-                init,
-            ],
-            ""
-        );
+        Self::emit_new_stmts(
+            name,
+            tvalue_names::types::NUMBER,
+            tvalue_names::ctors::NUMBER,
+            &self.module,
+            &self.builder,
+            Some(init),
+        )
+    }
+
+    pub fn emit_new_bool(&self, name: &str, init: BasicMetadataValueEnum) -> PointerValue<'ctx> {
+        Self::emit_new_stmts(
+            name,
+            tvalue_names::types::BOOL,
+            tvalue_names::ctors::BOOL,
+            &self.module,
+            &self.builder,
+            Some(init),
+        )
+    }
+
+    pub fn emit_new_stmts<'a>(
+        var_name: &str,
+        ty_name: &str,
+        ctor_name: &str,
+        module: &Module<'a>,
+        builder: &Builder<'a>,
+        init: Option<BasicMetadataValueEnum>,
+    ) -> PointerValue<'a> {
+        let ty = module.get_struct_type(ty_name).unwrap();
+        let ctor = module.get_function(ctor_name).unwrap();
+        let v = builder.build_alloca(ty, var_name);
+        let mut args: Vec<BasicMetadataValueEnum> = vec![v.as_basic_value_enum().into()];
+        if let Some(init) = init {
+            args.push(init);
+        }
+        builder.build_call(ctor, &args, "");
         v
-    } 
+    }
 }
 
 pub struct TableField {
@@ -892,16 +1346,9 @@ mod test {
         let context = Context::create();
         let mut builder = TValueModuleBuilder::new(&context);
         let module = builder.gen_lib();
-        let new_nil_fun = module
-            .get_function(TValueModuleBuilder::NIL_CTOR_NAME)
-            .unwrap();
-        let new_bool_fun = module
-            .get_function(TValueModuleBuilder::BOOL_CTOR_NAME)
-            .unwrap();
-        let new_num_fun = module
-            .get_function(TValueModuleBuilder::NUM_CTOR_NAME)
-            .unwrap();
-        // let new_table_fun = module.get_function("enum_TValue_new_table").unwrap();
+        let new_nil_fun = module.get_function(tvalue_names::ctors::NIL).unwrap();
+        let new_bool_fun = module.get_function(tvalue_names::ctors::BOOL).unwrap();
+        let new_num_fun = module.get_function(tvalue_names::ctors::NUMBER).unwrap();
         let builder = context.create_builder();
 
         build_test_tag_func(&context, &module, &builder, "test_nil", new_nil_fun, &[]);
@@ -921,9 +1368,7 @@ mod test {
             new_num_fun,
             &[context.f32_type().const_float(u32::MAX as _).into()],
         );
-        // let s_ctor = build_string_ctor_func("hello world", &context, &module, &builder);
-        // build_test_tag_func(&context, &module, &builder, "test_string", s_ctor, &[]);
-        
+
         maybe_write_test_module("tag_value", &module);
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
@@ -931,8 +1376,6 @@ mod test {
         call_tag_test_fn("test_nil", &jit, 0);
         call_tag_test_fn("test_bool", &jit, 1);
         call_tag_test_fn("test_num", &jit, 2);
-        // call_tag_test_fn("test_string", &jit, 3);
-        // call_tag_test_fn("test_table", &jit, 4);
     }
 
     fn build_test_tag_func<'ctx>(
@@ -945,20 +1388,18 @@ mod test {
     ) {
         let test_func = module.add_function(test_name, context.i8_type().fn_type(&[], false), None);
         let tag_fun = module
-            .get_function(TValueModuleBuilder::GET_TAG_FN_NAME)
+            .get_function(tvalue_names::helper_funcs::GET_TAG)
             .unwrap();
         let entry = context.append_basic_block(test_func, "entry");
         builder.position_at_end(entry);
         eprintln!("setting call for {test_name}");
         let arg = builder.build_alloca(
-            module
-                .get_struct_type(TValueModuleBuilder::BASE_TYPE_NAME)
-                .unwrap(),
+            module.get_struct_type(tvalue_names::types::BASE).unwrap(),
             "base",
         );
         let mut args: Vec<BasicMetadataValueEnum> = vec![arg.into()];
         for arg in ctor_args {
-            args.push(arg.clone());
+            args.push(arg);
         }
         builder.build_call(ctor.into(), args.as_slice(), "arg");
         let ret = builder.build_call(
@@ -987,52 +1428,6 @@ mod test {
         assert_eq!(val, expected_tag, "{name}");
     }
 
-    fn build_string_ctor_func<'ctx>(
-        s: &str,
-        context: &'ctx Context,
-        module: &Module<'ctx>,
-        builder: &Builder<'ctx>,
-    ) -> FunctionValue<'ctx> {
-        let bytes = s.as_bytes();
-        let f_ty = module
-            .get_struct_type(TValueModuleBuilder::STR_TYPE_NAME)
-            .unwrap();
-        let f_ty = f_ty.ptr_type(Default::default()).fn_type(&[], false);
-        let f = module.add_function("new_seeded_string", f_ty, None);
-        let entry = context.append_basic_block(f.clone(), "entry");
-        let ba_f = module
-            .get_function(TValueModuleBuilder::BARR_CTOR_NAME)
-            .expect("new_byte_array");
-        builder.position_at_end(entry);
-        let s_ptr = builder.build_alloca(context.i8_type().array_type(s.len() as _), "s_ptr");
-        let mut b = Vec::with_capacity(bytes.len());
-
-        for &ch in bytes.iter() {
-            b.push(context.i8_type().const_int(ch as _, false))
-        }
-
-        let b = context.i8_type().const_array(b.as_slice());
-        builder.build_store(s_ptr.clone(), b);
-        let new_s_f = module
-            .get_function(TValueModuleBuilder::STR_CTOR_NAME)
-            .expect("string ctor");
-        let ba = builder.build_call(
-            ba_f,
-            &[
-                context.i8_type().const_int(bytes.len() as _, false).into(),
-                s_ptr.into(),
-            ],
-            "ba",
-        );
-        let ret = builder.build_call(
-            new_s_f,
-            &[ba.as_any_value_enum().into_pointer_value().into()],
-            "ret",
-        );
-        builder.build_return(Some(&ret.as_any_value_enum().into_pointer_value()));
-        f
-    }
-
     #[test]
     fn check_truthiness() {
         let context = Context::create();
@@ -1042,12 +1437,12 @@ mod test {
         let module = builder.gen_lib();
         let builder = context.create_builder();
         let is_bool = module
-            .get_function("getTValueValue_bool")
-            .expect("getTValueValue_bool");
+            .get_function(tvalue_names::helper_funcs::TRUTHY)
+            .expect(tvalue_names::helper_funcs::TRUTHY);
         for bb in is_bool.get_basic_blocks() {
             let mut name = bb.get_name().to_str().unwrap();
             if name == "entry" {
-                name = "getTValueValue_bool";
+                name = tvalue_names::helper_funcs::TRUTHY;
             }
             builder.position_at(bb, &bb.get_first_instruction().unwrap());
             build_print(&context, &module, &builder, name);
@@ -1056,7 +1451,7 @@ mod test {
             "print_tvalue",
             context.void_type().fn_type(
                 &[module
-                    .get_struct_type(TValueModuleBuilder::BASE_TYPE_NAME)
+                    .get_struct_type(tvalue_names::types::BASE)
                     .unwrap()
                     .ptr_type(Default::default())
                     .into()],
@@ -1079,9 +1474,7 @@ mod test {
             &context,
             &module,
             &builder,
-            module
-                .get_function(TValueModuleBuilder::NIL_CTOR_NAME)
-                .unwrap(),
+            module.get_function(tvalue_names::ctors::NIL).unwrap(),
             context.bool_type().const_int(0, false).into(),
             "test_nil",
         );
@@ -1089,9 +1482,7 @@ mod test {
             &context,
             &module,
             &builder,
-            module
-                .get_function(TValueModuleBuilder::BOOL_CTOR_NAME)
-                .unwrap(),
+            module.get_function(tvalue_names::ctors::BOOL).unwrap(),
             context.bool_type().const_int(1, false).into(),
             "test_bool_true",
         );
@@ -1099,9 +1490,7 @@ mod test {
             &context,
             &module,
             &builder,
-            module
-                .get_function(TValueModuleBuilder::BOOL_CTOR_NAME)
-                .unwrap(),
+            module.get_function(tvalue_names::ctors::BOOL).unwrap(),
             context.bool_type().const_int(0, false).into(),
             "test_bool_false",
         );
@@ -1109,9 +1498,7 @@ mod test {
             &context,
             &module,
             &builder,
-            module
-                .get_function(TValueModuleBuilder::NUM_CTOR_NAME)
-                .unwrap(),
+            module.get_function(tvalue_names::ctors::NUMBER).unwrap(),
             context.f32_type().const_float(0.11).into(),
             "test_number",
         );
@@ -1135,10 +1522,11 @@ mod test {
     ) {
         let printf = module.get_function("printf").expect("printf");
         let s_ptr = builder.build_alloca(context.i8_type().array_type((s.len() + 2) as _), "s");
-        builder.build_store(s_ptr, context.i8_type().const_array(&s_to_arr_nl_z(context, s)));
-        builder.build_call(printf, &[
-            s_ptr.into(),
-        ], "");
+        builder.build_store(
+            s_ptr,
+            context.i8_type().const_array(&s_to_arr_nl_z(context, s)),
+        );
+        builder.build_call(printf, &[s_ptr.into()], "");
     }
 
     fn s_to_arr_nl_z<'ctx>(context: &'ctx Context, s: &str) -> Vec<IntValue<'ctx>> {
@@ -1163,13 +1551,13 @@ mod test {
         let f = module.add_function(name, context.i32_type().fn_type(&[], false), None);
         let entry = context.append_basic_block(f, "entry");
         let is_bool = module
-            .get_function("getTValueValue_bool")
+            .get_function(tvalue_names::helper_funcs::TRUTHY)
             .expect("getTValueValue_bool");
         builder.position_at_end(entry);
         build_print(context, module, builder, name);
         let alloc = builder.build_alloca(
             module
-                .get_struct_type(TValueModuleBuilder::BASE_TYPE_NAME)
+                .get_struct_type(tvalue_names::types::BASE)
                 .expect("base"),
             "t",
         );
@@ -1186,10 +1574,6 @@ mod test {
                 .i8_type()
                 .const_array(&s_to_arr_nl_z(context, output_fmt)),
         );
-        // let _output = builder.build_call(print, &[
-        //     fmt_ptr.into(),
-        //     ret.as_any_value_enum().into_int_value().into(),
-        // ], "");
         let ret = builder.build_int_z_extend(
             ret.as_any_value_enum().into_int_value(),
             context.i32_type(),
@@ -1220,49 +1604,160 @@ mod test {
         let context = Context::create();
         let mut module_builder = TValueModuleBuilder::new(&context);
         let module = module_builder.gen_lib();
-        let base_ty = module.get_struct_type(TValueModuleBuilder::BASE_TYPE_NAME).unwrap();
-        let add_fn = module.get_function("tvalue_add").unwrap();
         let name1 = "test_num_add_happy";
-        let test_happy_fn = module.add_function(name1, context.f32_type().fn_type(&[
-            context.f32_type().into(),
-            context.f32_type().into(),
-        ], false), None);
-        let arg1 = test_happy_fn.get_first_param().unwrap();
-        let arg2 = test_happy_fn.get_last_param().unwrap();
-        let entry1 = context.append_basic_block(test_happy_fn, "entry");
-        module_builder.builder.position_at_end(entry1);
-        let lhs = module_builder.emit_new_number("lhs", arg1.as_basic_value_enum().into());
-        let rhs = module_builder.emit_new_number("lhs", arg2.as_basic_value_enum().into());
-        let ret = module_builder.emit_new_number("ret", 
-            context.f32_type().const_float(f64::NAN).into(),
-        );
-        let succ = module_builder.builder.build_call(add_fn, &[
-            lhs.as_basic_value_enum().into(),
-            rhs.as_basic_value_enum().into(),
-            ret.as_basic_value_enum().into(),
-        ], "ret");
-        let get_num = module.get_function("tvalue_get_number").unwrap();
-        let ret2 = module_builder.builder.build_call(get_num, &[
-            ret.as_basic_value_enum().into(),
-        ], "ret");
-        module_builder.builder.build_return(Some(&ret2.as_any_value_enum().into_float_value()));
-        
-        
-        maybe_write_test_module("add", &module);
+        build_math_happy_test(&module_builder, &module, tvalue_names::math::ADD, name1);
+        let add_fn = module.get_function(tvalue_names::math::ADD).unwrap();
+        let get_num = module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .unwrap();
 
+        let name2 = "add_num_bool";
+        let test_bool_fn = module.add_function(name2, context.f32_type().fn_type(&[], false), None);
+        let entry = context.append_basic_block(test_bool_fn, "entry");
+        module_builder.builder.position_at_end(entry);
+        let lhs = module_builder.emit_new_number("lhs", context.f32_type().const_float(1.0).into());
+        let rhs = module_builder.emit_new_bool("rhs", context.f32_type().const_float(1.0).into());
+        let ret =
+            module_builder.emit_new_number("ret", context.f32_type().const_float(f64::NAN).into());
+        let _succ = module_builder.builder.build_call(
+            add_fn,
+            &[
+                lhs.as_basic_value_enum().into(),
+                rhs.as_basic_value_enum().into(),
+                ret.as_basic_value_enum().into(),
+            ],
+            "ret",
+        );
+        let ret2 =
+            module_builder
+                .builder
+                .build_call(get_num, &[ret.as_basic_value_enum().into()], "ret");
+        module_builder
+            .builder
+            .build_return(Some(&ret2.as_any_value_enum().into_float_value()));
+
+        let name3 = "add_num_nil";
+        let test_bool_fn = module.add_function(name3, context.f32_type().fn_type(&[], false), None);
+        let entry = context.append_basic_block(test_bool_fn, "entry");
+        module_builder.builder.position_at_end(entry);
+        let lhs = TValueModuleBuilder::emit_new_stmts(
+            "lhs",
+            tvalue_names::types::BASE,
+            tvalue_names::ctors::NIL,
+            &module,
+            &module_builder.builder,
+            None,
+        );
+        let rhs = module_builder.emit_new_bool("rhs", context.f32_type().const_float(1.0).into());
+        let ret =
+            module_builder.emit_new_number("ret", context.f32_type().const_float(f64::NAN).into());
+        let _succ = module_builder.builder.build_call(
+            add_fn,
+            &[
+                lhs.as_basic_value_enum().into(),
+                rhs.as_basic_value_enum().into(),
+                ret.as_basic_value_enum().into(),
+            ],
+            "ret",
+        );
+        let ret2 =
+            module_builder
+                .builder
+                .build_call(get_num, &[ret.as_basic_value_enum().into()], "ret");
+        module_builder
+            .builder
+            .build_return(Some(&ret2.as_any_value_enum().into_float_value()));
+
+        maybe_write_test_module("add", &module);
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_num_add_test(name1, &jit, 1.0, 1.0, 2.0);
-        
+        let op = |l, r| l + r;
+        execute_happy_math_test(name1, &jit, 1.0, 1.0, op);
+        execute_happy_math_test(name1, &jit, 5.0, 5.0, op);
+        execute_happy_math_test(name1, &jit, 1.5, 0.5, op);
+        execute_happy_math_test(name1, &jit, 200.0, 600.0, op);
+        execute_sad_num_add_test(name2, &jit);
+        execute_sad_num_add_test(name3, &jit);
     }
 
-    fn execute_num_add_test<'ctx>(
+    #[test]
+    fn test_num_sub() {
+        let context = Context::create();
+        let mut module_builder = TValueModuleBuilder::new(&context);
+        let module = module_builder.gen_lib();
+        let name1 = "test_happy_sub";
+        build_math_happy_test(&module_builder, &module, tvalue_names::math::SUB, name1);
+        maybe_write_test_module("sub", &module);
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l - r)
+    }
+
+    #[test]
+    fn test_num_mul() {
+        let context = Context::create();
+        let mut module_builder = TValueModuleBuilder::new(&context);
+        let module = module_builder.gen_lib();
+        let name1 = "test_happy_mul";
+        build_math_happy_test(&module_builder, &module, tvalue_names::math::MUL, name1);
+        maybe_write_test_module("mul", &module);
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l * r)
+    }
+
+    #[test]
+    fn test_num_div() {
+        let context = Context::create();
+        let mut module_builder = TValueModuleBuilder::new(&context);
+        let module = module_builder.gen_lib();
+        let name1 = "test_happy_div";
+        build_math_happy_test(&module_builder, &module, tvalue_names::math::MUL, name1);
+        maybe_write_test_module("div", &module);
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l / r)
+    }
+
+    #[test]
+    fn test_num_pow() {
+        let context = Context::create();
+        let mut module_builder = TValueModuleBuilder::new(&context);
+        let module = module_builder.gen_lib();
+        let name1 = "test_happy_pow";
+        build_math_happy_test(&module_builder, &module, tvalue_names::math::POW, name1);
+        maybe_write_test_module("pow", &module);
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_happy_math_test(name1, &jit, 1.1, 2.2, |l, r| l.powf(r));
+        execute_happy_math_test(name1, &jit, 0.1, -2.2, |l, r| l.powf(r));
+    }
+
+    #[test]
+    fn test_num_mod() {
+        let context = Context::create();
+        let mut module_builder = TValueModuleBuilder::new(&context);
+        let module = module_builder.gen_lib();
+        let name1 = "test_happy_mod";
+        build_math_happy_test(&module_builder, &module, tvalue_names::math::MOD, name1);
+        maybe_write_test_module("mod", &module);
+        let jit = module
+            .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+            .unwrap();
+        execute_happy_math_test(name1, &jit, 1.2, 1.0, |l, r| l % r);
+    }
+
+    fn execute_happy_math_test<'ctx>(
         name: &'static str,
         jit: &'ctx ExecutionEngine<'ctx>,
         lhs: f32,
         rhs: f32,
-        expected: f32,
+        op: impl Fn(f32, f32) -> f32,
     ) {
         type TestFunc = unsafe extern "C" fn(f32, f32) -> f32;
         println!("looking up {name}");
@@ -1272,7 +1767,76 @@ mod test {
             })
         };
         let val = unsafe { func.call(lhs, rhs) };
-        assert_eq!(val, expected as _, "{name}");
+        assert_eq!(val, op(lhs, rhs), "{name}");
+    }
+
+    fn execute_sad_num_add_test<'ctx>(name: &'static str, jit: &'ctx ExecutionEngine<'ctx>) {
+        type TestFunc = unsafe extern "C" fn() -> f32;
+        println!("looking up {name}");
+        let func: JitFunction<TestFunc> = unsafe {
+            jit.get_function(name).unwrap_or_else(|e| {
+                panic!("{name}: {e}");
+            })
+        };
+        let val = unsafe { func.call() };
+        assert!(val.is_nan(), "{name} was not nan");
+    }
+
+    fn build_math_happy_test<'ctx>(
+        module_builder: &TValueModuleBuilder<'ctx>,
+        module: &Module<'ctx>,
+        math_fn_name: &str,
+        name: &str,
+    ) {
+        let get_num = module
+            .get_function(tvalue_names::helper_funcs::GET_VALUE_NUMBER)
+            .unwrap_or_else(|| {
+                panic!("get_num missing for {math_fn_name}");
+            });
+        let math_fn = module.get_function(math_fn_name).unwrap_or_else(|| {
+            panic!("math_fn: {math_fn_name} missing");
+        });
+        let test_fn = module.add_function(
+            name,
+            module_builder.context.f32_type().fn_type(
+                &[
+                    module_builder.context.f32_type().into(),
+                    module_builder.context.f32_type().into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        let arg1 = test_fn.get_first_param().unwrap();
+        let arg2 = test_fn.get_last_param().unwrap();
+        let entry1 = module_builder.context.append_basic_block(test_fn, "entry");
+        module_builder.builder.position_at_end(entry1);
+        let lhs = module_builder.emit_new_number("lhs", arg1.as_basic_value_enum().into());
+        let rhs = module_builder.emit_new_number("lhs", arg2.as_basic_value_enum().into());
+        let ret = module_builder.emit_new_number(
+            "ret",
+            module_builder
+                .context
+                .f32_type()
+                .const_float(f64::NAN)
+                .into(),
+        );
+        let _succ = module_builder.builder.build_call(
+            math_fn,
+            &[
+                lhs.as_basic_value_enum().into(),
+                rhs.as_basic_value_enum().into(),
+                ret.as_basic_value_enum().into(),
+            ],
+            "ret",
+        );
+        let ret2 =
+            module_builder
+                .builder
+                .build_call(get_num, &[ret.as_basic_value_enum().into()], "ret");
+        module_builder
+            .builder
+            .build_return(Some(&ret2.as_any_value_enum().into_float_value()));
     }
 
     fn maybe_write_test_module<'ctx>(name: &str, module: &Module<'ctx>) {

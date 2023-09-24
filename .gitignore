@@ -12,3 +12,4 @@
 /llvm*
 # For debugging setting LUMINARY_WRITE_TEST_IR=1 will fill this directory with .ll files
 /test-ir
+*.out
