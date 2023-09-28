@@ -27,3 +27,4 @@ jobs:
       run: cargo test --verbose
       env: 
         LLVM_SYS_160_PREFIX: ${{ env.LLVM_PATH }}
+        LUMINARY_PRINT_TVALUE: 1
