@@ -468,7 +468,7 @@ nan:                                              ; preds = %entry
 two_ints:                                         ; preds = %ian
   %lhs1 = fptosi float %lhs_value to i32
   %rhs2 = fptosi float %rhs_value to i32
-  %rshed = lshr i32 %lhs1, %rhs2
+  %rshed = ashr i32 %lhs1, %rhs2
   %out3 = sitofp i32 %rshed to float
   call void @"std::tvalue::new_num"(ptr %out, float %out3)
   ret i1 true

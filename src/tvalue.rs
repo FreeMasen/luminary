@@ -1387,7 +1387,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     fn add_tvalue_bin_rsh(&self) {
         self.setup_binary_int_fn(tvalue_names::math::RSH, |lhs, rhs| {
             self.builder
-                .build_right_shift(lhs, rhs, false, "rshed")
+                .build_right_shift(lhs, rhs, true, "rshed")
                 .as_any_value_enum()
                 .into_int_value()
         });
@@ -1657,6 +1657,8 @@ mod test {
         execution_engine::{ExecutionEngine, JitFunction},
         values::{BasicMetadataValueEnum, FunctionValue},
     };
+
+    
 
     #[test]
     fn generate_t_value_module() {
@@ -2015,10 +2017,9 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         let op = |l, r| l + r;
-        execute_happy_math_test(name1, &jit, 1.0, 1.0, op);
-        execute_happy_math_test(name1, &jit, 5.0, 5.0, op);
-        execute_happy_math_test(name1, &jit, 1.5, 0.5, op);
-        execute_happy_math_test(name1, &jit, 200.0, 600.0, op);
+        proptest::proptest!(|(l: f32, r: f32)| {
+            execute_happy_math_test(name1, &jit, l, r, op);
+        });
         execute_sad_num_add_test(name2, &jit);
         execute_sad_num_add_test(name3, &jit);
     }
@@ -2034,7 +2035,9 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l - r)
+        proptest::proptest!(|(l: f32, r: f32)| {
+        execute_happy_math_test(name1, &jit, l, r, |l, r| l - r)
+        });
     }
 
     #[test]
@@ -2048,7 +2051,9 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l * r)
+        proptest::proptest!(|(l: f32, r: f32)| {
+        execute_happy_math_test(name1, &jit, l, r, |l, r| l * r)
+        });
     }
 
     #[test]
@@ -2062,7 +2067,9 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 1.0, |l, r| l / r)
+        proptest::proptest!(|(l: f32, r: f32)| {
+            execute_happy_math_test(name1, &jit, l, r, |l, r| l / r)
+        });
     }
 
     #[test]
@@ -2081,7 +2088,9 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 3.0, |l, r| (l / r).floor())
+        proptest::proptest!(|(l: f32, r: f32)| {
+            execute_happy_math_test(name1, &jit, l, r, |l, r| (l / r).floor())
+        });
     }
 
     #[test]
@@ -2095,8 +2104,9 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.1, 2.2, |l, r| l.powf(r));
-        execute_happy_math_test(name1, &jit, 0.1, -2.2, |l, r| l.powf(r));
+        proptest::proptest!(|(l: f32, r: f32)| {
+            execute_happy_math_test(name1, &jit, l, r, |l, r| l.powf(r));
+        });
     }
 
     #[test]
@@ -2110,7 +2120,9 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.2, 1.0, |l, r| l % r);
+        proptest::proptest!(|(l: f32, r: f32)| {
+            execute_happy_math_test(name1, &jit, l, r, |l, r| l % r);
+        });
     }
 
     #[test]
@@ -2124,8 +2136,10 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 2.0, |l, r| {
-            (l as u32 & r as u32) as f32
+        proptest::proptest!(|(l: i32, r: i32)| {
+            execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
+                (l as i32 & r as i32) as f32
+            });
         });
     }
 
@@ -2140,8 +2154,10 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 2.0, |l, r| {
-            (l as u32 | r as u32) as f32
+        proptest::proptest!(|(l: i32, r: i32)| {
+            execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
+                (l as i32 | r as i32) as f32
+            });
         });
     }
 
@@ -2156,8 +2172,10 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 2.0, |l, r| {
-            ((l as u32) << r as u32) as f32
+        proptest::proptest!(|(l: i32, r: u32)| {
+            execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
+                (l as i32).wrapping_shl(r as u32) as f32
+            });
         });
     }
 
@@ -2172,8 +2190,10 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_math_test(name1, &jit, 1.0, 2.0, |l, r| {
-            ((l as i32) >> r as i32) as f32
+        proptest::proptest!(|(l: i32, r: u32)| {
+            execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
+                ((l as i32).wrapping_shr(r as u32)) as f32
+            });
         });
     }
 
@@ -2188,8 +2208,11 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_unary_math_test(name1, &jit, 1.0, |l| {
-            (!(l as i32)) as f32
+        proptest::proptest!(|(v: i32)| {
+            let v = v as f32;
+            execute_happy_unary_math_test(name1, &jit, v, |l| {
+                (!(l as i32)) as f32
+            });
         });
     }
 
@@ -2204,8 +2227,10 @@ mod test {
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
-        execute_happy_unary_math_test(name1, &jit, 1.0, |l| {
-            -l
+        proptest::proptest!(|(v: f32)| {
+            execute_happy_unary_math_test(name1, &jit, v, |l| {
+                -l
+            });
         });
     }
 
@@ -2224,7 +2249,13 @@ mod test {
             })
         };
         let val = unsafe { func.call(lhs, rhs) };
-        assert_eq!(val, op(lhs, rhs), "{name}");
+        let expected = op(lhs, rhs);
+        if val.is_nan() && expected.is_nan()
+        && ((val.is_sign_positive() && expected.is_sign_positive())
+        || (val.is_sign_negative() && expected.is_sign_negative())) {
+            return;
+        }
+        assert_eq!(val, expected, "{name}: ({lhs}, {rhs}) -> {val} expected {expected}");
     }
 
     fn execute_happy_unary_math_test<'ctx>(
@@ -2240,8 +2271,10 @@ mod test {
                 panic!("{name}: {e}");
             })
         };
+
         let val = unsafe { func.call(lhs) };
-        assert_eq!(val, op(lhs), "{name}");
+        let expected = op(lhs);
+        assert_eq!(val, expected, "{name} ({lhs} -> {val} != {expected})");
     }
 
     fn execute_sad_num_add_test<'ctx>(name: &'static str, jit: &'ctx ExecutionEngine<'ctx>) {
