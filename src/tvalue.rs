@@ -862,7 +862,10 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             .unwrap_or_else(|| panic!("{struct_name} is not defined"));
         let f = self.setup_ctor(init_name, variant_id, ctor_arg.into_iter().collect());
         let arg1 = f.get_first_param().expect("1 arg");
-        if let Some(print_t) = self.module.get_function(tvalue_names::test_names::PRINT_TVALUE) {
+        if let Some(print_t) = self
+            .module
+            .get_function(tvalue_names::test_names::PRINT_TVALUE)
+        {
             self.builder.build_call(
                 print_t,
                 &[arg1.as_any_value_enum().into_pointer_value().into()],
@@ -897,7 +900,10 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             .expect("data_ptr");
         let arg2 = f.get_last_param().expect("init has 2 argument");
         self.builder.build_store(data_ptr, arg2);
-        if let Some(print_t) = self.module.get_function(tvalue_names::test_names::PRINT_TVALUE) {
+        if let Some(print_t) = self
+            .module
+            .get_function(tvalue_names::test_names::PRINT_TVALUE)
+        {
             self.builder.build_call(
                 print_t,
                 &[arg1.as_any_value_enum().into_pointer_value().into()],
@@ -1658,8 +1664,6 @@ mod test {
         values::{BasicMetadataValueEnum, FunctionValue},
     };
 
-    
-
     #[test]
     fn generate_t_value_module() {
         let context = Context::create();
@@ -1834,7 +1838,9 @@ mod test {
         let bb = is_bool.get_first_basic_block().unwrap();
         builder.position_at(bb, &bb.get_first_instruction().unwrap());
         builder.build_call(
-            module.get_function(tvalue_names::test_names::PRINT_TVALUE).unwrap(),
+            module
+                .get_function(tvalue_names::test_names::PRINT_TVALUE)
+                .unwrap(),
             &[is_bool
                 .get_first_param()
                 .unwrap()
@@ -2250,12 +2256,17 @@ mod test {
         };
         let val = unsafe { func.call(lhs, rhs) };
         let expected = op(lhs, rhs);
-        if val.is_nan() && expected.is_nan()
-        && ((val.is_sign_positive() && expected.is_sign_positive())
-        || (val.is_sign_negative() && expected.is_sign_negative())) {
+        if val.is_nan()
+            && expected.is_nan()
+            && ((val.is_sign_positive() && expected.is_sign_positive())
+                || (val.is_sign_negative() && expected.is_sign_negative()))
+        {
             return;
         }
-        assert_eq!(val, expected, "{name}: ({lhs}, {rhs}) -> {val} expected {expected}");
+        assert_eq!(
+            val, expected,
+            "{name}: ({lhs}, {rhs}) -> {val} expected {expected}"
+        );
     }
 
     fn execute_happy_unary_math_test<'ctx>(
@@ -2362,12 +2373,10 @@ mod test {
         });
         let test_fn = module.add_function(
             name,
-            module_builder.context.f32_type().fn_type(
-                &[
-                    module_builder.context.f32_type().into(),
-                ],
-                false,
-            ),
+            module_builder
+                .context
+                .f32_type()
+                .fn_type(&[module_builder.context.f32_type().into()], false),
             None,
         );
         let arg1 = test_fn.get_first_param().unwrap();
@@ -2442,10 +2451,10 @@ mod test {
             .unwrap();
         type TestFunc = unsafe extern "C" fn(f32) -> f32;
         let test_neg = unsafe { jit.get_function::<TestFunc>("test_neg").unwrap() };
-        let negged = unsafe { test_neg.call(1.0) };
-        assert_eq!(negged, -1.0);
-        let negged = unsafe { test_neg.call(-1.0) };
-        assert_eq!(negged, 1.0)
+        proptest::proptest!(|(v: f32)| {
+            let negged = unsafe { test_neg.call(v) };
+            assert_eq!(negged, -v);
+        });
     }
 
     fn maybe_write_test_module<'ctx>(name: &str, module: &Module<'ctx>) {
