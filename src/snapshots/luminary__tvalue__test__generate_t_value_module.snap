@@ -5,9 +5,10 @@ expression: module.to_string()
 ; ModuleID = 'std::tvalue'
 source_filename = "std::tvalue"
 
-%"std::tvalue::TValue" = type { i8, [15 x i8] }
-%"std::tvalue::TValue::Bool" = type { [15 x i8], i8 }
-%"std::tvalue::TValue::Number" = type { [8 x i8], float }
+%"std::tvalue::TValue" = type { i8, [23 x i8] }
+%"std::tvalue::TValue::Bool" = type { [23 x i8], i8 }
+%"std::tvalue::TValue::Number" = type { [12 x i8], float }
+%"std::tvalue::TValue::String" = type { i8, i32, i32, i32, ptr }
 
 @"tvalue::names::nil" = global [5 x i8] c"nil\0A\00"
 @"tvalue::names::true" = global [6 x i8] c"true\0A\00"
@@ -17,7 +18,7 @@ source_filename = "std::tvalue"
 ; Function Attrs: nounwind
 declare ptr @malloc(i32) #0
 
-define void @"std::tvalue_new_nil"(ptr %0) {
+define void @"std::tvalue::new_nil"(ptr %0) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
   store i8 0, ptr %tag_ptr, align 1
@@ -26,7 +27,7 @@ entry:
   ret void
 }
 
-define void @"std::tvalue_new_bool"(ptr %0, i1 %1) {
+define void @"std::tvalue::new_bool"(ptr %0, i1 %1) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
   store i8 1, ptr %tag_ptr, align 1
@@ -41,6 +42,22 @@ entry:
   store i8 2, ptr %tag_ptr, align 1
   %data_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %0, i32 0, i32 1
   store float %1, ptr %data_ptr, align 4
+  ret void
+}
+
+define void @"std::tvalue::new_str"(ptr %0, i32 %1) {
+entry:
+  %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
+  store i8 3, ptr %tag_ptr, align 1
+  %len_ptr = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 1
+  store i32 0, ptr %len_ptr, align 4
+  %cap_ptr = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 2
+  store i32 %1, ptr %cap_ptr, align 4
+  %ref_ct = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 3
+  store i32 0, ptr %ref_ct, align 4
+  %bytes_ptr = call ptr @malloc(i32 %1)
+  %storage = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 4
+  store ptr %bytes_ptr, ptr %storage, align 8
   ret void
 }
 
@@ -97,40 +114,59 @@ nan:                                              ; preds = %entry
 
 declare i32 @printf(ptr, ...)
 
-define void @print_tvalue(ptr %0) {
+declare i32 @write(i32, ptr, i32)
+
+define void @"std::tvalue::test::print_tvalue_string"(ptr %0) {
+entry:
+  %len_ptr = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 1
+  %len = load i32, ptr %len_ptr, align 4
+  %bytes_ptr_ptr = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 4
+  %bytes_ptr = load ptr, ptr %bytes_ptr_ptr, align 8
+  %_ = call i32 @write(i32 1, ptr %bytes_ptr, i32 %len)
+  ret void
+}
+
+define void @"std::tvalue::test::print_tvalue_raw"(ptr %0) {
+entry:
+  %ob = alloca [2 x i8], align 1
+  store [2 x i8] c"[\00", ptr %ob, align 1
+  %_ = call i32 (ptr, ...) @printf(ptr %ob)
+  br label %looptop
+
+looptop:                                          ; preds = %looptop, %entry
+  %idx = phi i32 [ %nextidx, %looptop ], [ 0, %entry ]
+  %nextidx = add i32 %idx, 1
+  %ch = getelementptr [16 x i8], ptr %0, i32 0, i32 %idx
+  %ch1 = load i8, ptr %ch, align 1
+  %ch_fmt = alloca [5 x i8], align 1
+  store [5 x i8] c"%*i,\00", ptr %ch_fmt, align 1
+  %_2 = call i32 (ptr, ...) @printf(ptr %ch_fmt, i8 3, i8 %ch1)
+  %done = icmp uge i32 %nextidx, ptrtoint (ptr getelementptr (%"std::tvalue::TValue", ptr null, i32 1) to i32)
+  br i1 %done, label %exit, label %looptop
+
+exit:                                             ; preds = %looptop
+  %cb = alloca [3 x i8], align 1
+  store [3 x i8] c"]\0A\00", ptr %cb, align 1
+  %_3 = call i32 (ptr, ...) @printf(ptr %cb)
+  ret void
+}
+
+define void @"std::tvalue::test::print_tvalue"(ptr %0) {
 entry:
   %tag = call i8 @"std::tvalue::get_tag"(ptr %0)
   switch i8 %tag, label %unknown [
     i8 0, label %nil
     i8 1, label %boolean
     i8 2, label %number
+    i8 3, label %string
   ]
 
 unknown:                                          ; preds = %entry
-  %ob = alloca [2 x i8], align 1
-  store [2 x i8] c"[\00", ptr %ob, align 1
-  %1 = call i32 (ptr, ...) @printf(ptr %ob)
-  br label %looptop
-
-looptop:                                          ; preds = %looptop, %unknown
-  %idx = phi i32 [ %nextidx, %looptop ], [ 0, %unknown ]
-  %nextidx = add i32 %idx, 1
-  %ch = getelementptr [16 x i8], ptr %0, i32 0, i32 %idx
-  %ch1 = load i8, ptr %ch, align 1
-  %ch_fmt = alloca [5 x i8], align 1
-  store [5 x i8] c"%*i,\00", ptr %ch_fmt, align 1
-  %2 = call i32 (ptr, ...) @printf(ptr %ch_fmt, i8 3, i8 %ch1)
-  %done = icmp ugt i32 %nextidx, 15
-  br i1 %done, label %exit, label %looptop
-
-exit:                                             ; preds = %looptop
-  %cb = alloca [3 x i8], align 1
-  store [3 x i8] c"]\0A\00", ptr %cb, align 1
-  %3 = call i32 (ptr, ...) @printf(ptr %cb)
+  call void @"std::tvalue::test::print_tvalue_raw"(ptr %0)
   ret void
 
 nil:                                              ; preds = %entry
-  %4 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::nil")
+  %_ = call i32 (ptr, ...) @printf(ptr @"tvalue::names::nil")
   ret void
 
 boolean:                                          ; preds = %entry
@@ -142,15 +178,19 @@ number:                                           ; preds = %entry
   %num_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %0, i32 0, i32 1
   %num = load float, ptr %num_ptr, align 4
   %dbl = fpext float %num to double
-  %5 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::float_fmt", double %dbl)
+  %_3 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::float_fmt", double %dbl)
+  ret void
+
+string:                                           ; preds = %entry
+  call void @"std::tvalue::test::print_tvalue_string"(ptr %0)
   ret void
 
 bool_true:                                        ; preds = %boolean
-  %6 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::true")
+  %_1 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::true")
   ret void
 
 bool_false:                                       ; preds = %boolean
-  %7 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::false")
+  %_2 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::false")
   ret void
 }
 
@@ -463,6 +503,6 @@ attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memo
 
 !llvm.dbg.cu = !{!0}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1, producer: "luminary", isOptimized: false, runtimeVersion: 1, emissionKind: FullDebug, splitDebugInlining: false)
+!0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1, producer: "luminary", isOptimized: false, runtimeVersion: 1, emissionKind: FullDebug, splitDebugInlining: false, sysroot: "_", sdk: "_")
 !1 = !DIFile(filename: "std_tvalue.ll", directory: ".")
 
