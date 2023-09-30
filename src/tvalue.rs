@@ -765,11 +765,11 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             &[
                 // variant
                 self.context.i8_type().into(),
-                // reference count
-                self.context.i32_type().into(),
                 // length
                 self.context.i32_type().into(),
                 // capacity
+                self.context.i32_type().into(),
+                // reference count
                 self.context.i32_type().into(),
                 // ptr is fully opaque so using the i8_type() here doesn't matter
                 self.context.i8_type().ptr_type(Default::default()).into(),
@@ -930,6 +930,13 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         arg_ptr.set_name("tagged_value");
         let entry_block = self.context.append_basic_block(func, "entry");
         self.builder.position_at_end(entry_block);
+        let is_null = self.builder.build_is_null(arg_ptr, "is_null");
+        let null_block = self.context.append_basic_block(func, "null_block");
+        let not_null_block = self.context.append_basic_block(func, "not_null");
+        self.builder.build_conditional_branch(is_null, null_block, not_null_block);
+        self.builder.position_at_end(null_block);
+        self.builder.build_return(Some(&self.context.i8_type().const_int(0, false)));
+        self.builder.position_at_end(not_null_block);
         let tag_gep = unsafe {
             self.builder.build_in_bounds_gep(
                 base_type,
