@@ -503,6 +503,6 @@ attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memo
 
 !llvm.dbg.cu = !{!0}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1, producer: "luminary", isOptimized: false, runtimeVersion: 1, emissionKind: FullDebug, splitDebugInlining: false, sysroot: "_", sdk: "_")
+!0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1, producer: "luminary", isOptimized: false, runtimeVersion: 1, emissionKind: FullDebug, splitDebugInlining: false)
 !1 = !DIFile(filename: "std_tvalue.ll", directory: ".")
 
