@@ -63,6 +63,13 @@ entry:
 
 define i8 @"std::tvalue::get_tag"(ptr %tagged_value) {
 entry:
+  %is_null = icmp eq ptr %tagged_value, null
+  br i1 %is_null, label %null_block, label %not_null
+
+null_block:                                       ; preds = %entry
+  ret i8 0
+
+not_null:                                         ; preds = %entry
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %tagged_value, i32 0, i32 0
   %tag_val = load i8, ptr %tag_ptr, align 1
   ret i8 %tag_val

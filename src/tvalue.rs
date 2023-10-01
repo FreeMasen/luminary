@@ -187,7 +187,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
     }
 
-    #[cfg(test)]
     fn gen_test_stuff(&self) {
         let get_tag_fn = self
             .module
@@ -365,7 +364,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.builder.build_return(None);
     }
 
-    #[cfg(test)]
     fn add_tvalue_print_string(&self) -> FunctionValue<'ctx> {
         let ty = self
             .module
@@ -420,7 +418,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         f
     }
 
-    #[cfg(test)]
     fn add_tvalue_print_unknown(&self) -> FunctionValue<'ctx> {
         let base_ty = self
             .module
@@ -533,11 +530,8 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.add_get_value_bool();
         self.add_tvalue_is_number();
         self.add_tvalue_get_number();
-        #[cfg(test)]
-        {
-            self.gen_test_stuff();
-            self.verify();
-        }
+        self.gen_test_stuff();
+        self.verify();
         self.add_tvalue_check_two_numbers();
         self.add_tvalue_add();
         self.add_tvalue_sub();
