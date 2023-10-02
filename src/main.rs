@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, process::{Command, Stdio, Output as ChildOutput}, io::{Write, Stdout, Read}, fs::File, fmt::Display};
+use std::{path::{PathBuf, Path}, process::{Command, Stdio, Output as ChildOutput}, io::{Write, Stdout, Read}, fs::{File, OpenOptions}, fmt::Display};
 
 use clap::{Parser, ValueEnum};
 use inkwell::{module::Module, context::Context};
@@ -127,8 +127,9 @@ fn main() {
                 cmd.arg(tmp_o.path());
                 Some(tmp2)
             };
-            cmd.arg("-no-pie")
-                .arg("-lm")
+            cmd
+            .arg("-lm")
+                .arg("-no-pie")
                 .arg(tmp_o.path());
             let child = cmd.spawn().unwrap();
             let clang_outout = child.wait_with_output().unwrap();
@@ -172,7 +173,7 @@ fn run_llc(
 
 fn get_dest(dest: Option<&PathBuf>) -> Output {
     if let Some(dest) = dest {
-        Output::File(File::open(dest).unwrap())
+        Output::File(OpenOptions::new().create(true).append(true).open(dest).unwrap())
     } else {
         Output::StdIo(std::io::stdout())
     }

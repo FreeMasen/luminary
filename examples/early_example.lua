@@ -5,3 +5,6 @@ print(b)
 c = a + b
 print(c)
 print "hello world"
+print(true)
+print(false)
+print(nil)

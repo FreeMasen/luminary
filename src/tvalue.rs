@@ -187,7 +187,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
     }
 
-    fn gen_test_stuff(&self) {
+    fn gen_print_stuff(&self) {
         let get_tag_fn = self
             .module
             .get_function(tvalue_names::helper_funcs::GET_TAG)
@@ -200,30 +200,21 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ),
             None,
         );
+        let write = self.module.add_function(
+            "write",
+            self.context.i32_type().fn_type(
+                &[
+                    self.context.i32_type().into(),
+                    self.context.i8_type().ptr_type(Default::default()).into(),
+                    self.context.i32_type().into(),
+                ],
+                true,
+            ),
+            None,
+        );
 
         let print_string = self.add_tvalue_print_string();
         let print_unknown = self.add_tvalue_print_unknown();
-        const FMTS: &[&str] = &["nil", "true", "false", "%f"];
-        for name in FMTS {
-            let var_name = if name.contains("%") {
-                "float_fmt"
-            } else {
-                name
-            };
-            let glb = self.module.add_global(
-                self.context.i8_type().array_type((name.len() + 2) as _),
-                None,
-                &format!("tvalue::names::{var_name}"),
-            );
-            let init = name
-                .as_bytes()
-                .into_iter()
-                .chain("\n\0".as_bytes().into_iter())
-                .map(|c| self.context.i8_type().const_int(*c as u64, false))
-                .collect::<Vec<_>>();
-            let init = self.context.i8_type().const_array(init.as_slice());
-            glb.set_initializer(&init.as_basic_value_enum());
-        }
         let print_tvalue = self.module.add_function(
             tvalue_names::test_names::PRINT_TVALUE,
             self.context.void_type().fn_type(
@@ -237,7 +228,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ),
             None,
         );
-
         let entry = self.context.append_basic_block(print_tvalue, "entry");
         let arg = print_tvalue
             .get_first_param()
@@ -272,17 +262,20 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
         );
         self.builder.position_at_end(nil);
+        let nil_fmt = self.builder.build_alloca(self.context.i8_type().array_type(4), "nil_fmt");
+        let s = b"nil\n".into_iter().map(|c| self.context.i8_type().const_int(*c as _, false)).collect::<Vec<_>>();
+        self.builder.build_store(nil_fmt, self.context.i8_type().const_array(&s));
         self.builder.build_call(
-            printf,
-            &[self
-                .module
-                .get_global("tvalue::names::nil")
-                .unwrap()
-                .as_basic_value_enum()
-                .into()],
+            write,
+            &[
+                self.context.i32_type().const_int(1, true).into(),
+                nil_fmt.into(),
+                self.context.i32_type().const_int(s.len() as _, true).into(),
+            ],
             "_",
         );
         self.builder.build_return(None);
+
         self.builder.position_at_end(boolean);
         let truthy_ptr = self
             .builder
@@ -305,29 +298,35 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.builder
             .build_conditional_branch(truthy, bool_true, bool_false);
         self.builder.position_at_end(bool_true);
+        let true_fmt = self.builder.build_alloca(self.context.i8_type().array_type(4), "nil_fmt");
+        let s: Vec<IntValue<'_>> = b"true\n".into_iter().map(|c| self.context.i8_type().const_int(*c as _, false)).collect::<Vec<_>>();
+        self.builder.build_store(true_fmt, self.context.i8_type().const_array(&s));
         self.builder.build_call(
-            printf,
-            &[self
-                .module
-                .get_global("tvalue::names::true")
-                .unwrap()
-                .as_basic_value_enum()
-                .into()],
+            write,
+            &[
+                self.context.i32_type().const_int(1, true).into(),
+                true_fmt.into(),
+                self.context.i32_type().const_int(s.len() as _, true).into(),
+            ],
             "_",
         );
         self.builder.build_return(None);
+
         self.builder.position_at_end(bool_false);
+        let false_fmt = self.builder.build_alloca(self.context.i8_type().array_type(4), "nil_fmt");
+        let s: Vec<IntValue<'_>> = b"false\n".into_iter().map(|c| self.context.i8_type().const_int(*c as _, false)).collect::<Vec<_>>();
+        self.builder.build_store(false_fmt, self.context.i8_type().const_array(&s));
         self.builder.build_call(
-            printf,
-            &[self
-                .module
-                .get_global("tvalue::names::false")
-                .unwrap()
-                .as_basic_value_enum()
-                .into()],
+            write,
+            &[
+                self.context.i32_type().const_int(1, true).into(),
+                false_fmt.into(),
+                self.context.i32_type().const_int(s.len() as _, true).into(),
+            ],
             "_",
         );
         self.builder.build_return(None);
+        
         self.builder.position_at_end(number);
         let num_ptr = self
             .builder
@@ -346,13 +345,15 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let dbl =
             self.builder
                 .build_float_ext(num.into_float_value(), self.context.f64_type(), "dbl");
+        let s = b"%f\n\0";
+        let num_fmt = self.builder.build_alloca(self.context.i8_type().array_type(s.len() as _), "num_fmt");
+        let bytes = s.into_iter().map(|b| self.context.i8_type().const_int(*b as _, false)).collect::<Vec<_>>();
+        let bytes = self.context.i8_type().const_array(&bytes);
+        self.builder.build_store(num_fmt, bytes);
         self.builder.build_call(
             printf,
             &[
-                self.module
-                    .get_global("tvalue::names::float_fmt")
-                    .unwrap()
-                    .as_basic_value_enum()
+                num_fmt
                     .into(),
                 dbl.into(),
             ],
@@ -369,18 +370,9 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             .module
             .get_struct_type(tvalue_names::types::STRING)
             .unwrap();
-        let write = self.module.add_function(
+        let write = self.module.get_function(
             "write",
-            self.context.i32_type().fn_type(
-                &[
-                    self.context.i32_type().into(),
-                    self.context.i8_type().ptr_type(Default::default()).into(),
-                    self.context.i32_type().into(),
-                ],
-                false,
-            ),
-            None,
-        );
+        ).unwrap();
         let (f, _entry) = self.add_function(
             tvalue_names::test_names::PRINT_TVALUE_STRING,
             self.context
@@ -548,7 +540,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.add_get_value_bool();
         self.add_tvalue_is_number();
         self.add_tvalue_get_number();
-        self.gen_test_stuff();
+        self.gen_print_stuff();
         self.verify();
         self.add_tvalue_check_two_numbers();
         self.add_tvalue_add();

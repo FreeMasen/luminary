@@ -121,7 +121,7 @@ nan:                                              ; preds = %entry
 
 declare i32 @printf(ptr, ...)
 
-declare i32 @write(i32, ptr, i32)
+declare i32 @write(i32, ptr, i32, ...)
 
 define void @"std::tvalue::test::print_tvalue_string"(ptr %0) {
 entry:
@@ -129,7 +129,10 @@ entry:
   %len = load i32, ptr %len_ptr, align 4
   %bytes_ptr_ptr = getelementptr inbounds %"std::tvalue::TValue::String", ptr %0, i32 0, i32 4
   %bytes_ptr = load ptr, ptr %bytes_ptr_ptr, align 8
-  %_ = call i32 @write(i32 1, ptr %bytes_ptr, i32 %len)
+  %_ = call i32 (i32, ptr, i32, ...) @write(i32 1, ptr %bytes_ptr, i32 %len)
+  %nl = alloca [1 x i8], align 1
+  store [1 x i8] c"\0A", ptr %nl, align 1
+  %_1 = call i32 (i32, ptr, i32, ...) @write(i32 1, ptr %nl, i32 1)
   ret void
 }
 
@@ -173,7 +176,9 @@ unknown:                                          ; preds = %entry
   ret void
 
 nil:                                              ; preds = %entry
-  %_ = call i32 (ptr, ...) @printf(ptr @"tvalue::names::nil")
+  %nil_fmt = alloca [4 x i8], align 1
+  store [4 x i8] c"nil\0A", ptr %nil_fmt, align 1
+  %_ = call i32 (i32, ptr, i32, ...) @write(i32 1, ptr %nil_fmt, i32 4)
   ret void
 
 boolean:                                          ; preds = %entry
@@ -185,7 +190,9 @@ number:                                           ; preds = %entry
   %num_ptr = getelementptr inbounds %"std::tvalue::TValue::Number", ptr %0, i32 0, i32 1
   %num = load float, ptr %num_ptr, align 4
   %dbl = fpext float %num to double
-  %_3 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::float_fmt", double %dbl)
+  %num_fmt = alloca [4 x i8], align 1
+  store [4 x i8] c"%f\0A\00", ptr %num_fmt, align 1
+  %_5 = call i32 (ptr, ...) @printf(ptr %num_fmt, double %dbl)
   ret void
 
 string:                                           ; preds = %entry
@@ -193,11 +200,15 @@ string:                                           ; preds = %entry
   ret void
 
 bool_true:                                        ; preds = %boolean
-  %_1 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::true")
+  %nil_fmt1 = alloca [4 x i8], align 1
+  store [5 x i8] c"true\0A", ptr %nil_fmt1, align 1
+  %_2 = call i32 (i32, ptr, i32, ...) @write(i32 1, ptr %nil_fmt1, i32 5)
   ret void
 
 bool_false:                                       ; preds = %boolean
-  %_2 = call i32 (ptr, ...) @printf(ptr @"tvalue::names::false")
+  %nil_fmt3 = alloca [4 x i8], align 1
+  store [6 x i8] c"false\0A", ptr %nil_fmt3, align 1
+  %_4 = call i32 (i32, ptr, i32, ...) @write(i32 1, ptr %nil_fmt3, i32 6)
   ret void
 }
 
