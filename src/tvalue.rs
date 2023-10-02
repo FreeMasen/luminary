@@ -414,6 +414,24 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             "_",
         );
+        let nl = self
+            .builder
+            .build_alloca(self.context.i8_type().array_type(1), "nl");
+        self.builder.build_store(
+            nl,
+            self.context
+                .i8_type()
+                .const_array(&[self.context.i8_type().const_int(b'\n' as _, false)]),
+        );
+        self.builder.build_call(
+            write,
+            &[
+                self.context.i32_type().const_int(1, false).into(),
+                nl.into(),
+                self.context.i32_type().const_int(1, false).into(),
+            ],
+            "_",
+        );
         self.builder.build_return(None);
         f
     }
@@ -927,9 +945,11 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let is_null = self.builder.build_is_null(arg_ptr, "is_null");
         let null_block = self.context.append_basic_block(func, "null_block");
         let not_null_block = self.context.append_basic_block(func, "not_null");
-        self.builder.build_conditional_branch(is_null, null_block, not_null_block);
+        self.builder
+            .build_conditional_branch(is_null, null_block, not_null_block);
         self.builder.position_at_end(null_block);
-        self.builder.build_return(Some(&self.context.i8_type().const_int(0, false)));
+        self.builder
+            .build_return(Some(&self.context.i8_type().const_int(0, false)));
         self.builder.position_at_end(not_null_block);
         let tag_gep = unsafe {
             self.builder.build_in_bounds_gep(

@@ -112,7 +112,6 @@ pub fn emit_code<'ctx>(gen: &CodeGenerator<'ctx>, lua: String) {
                 let rhs = expression_to_ptr(&gen, &*right, "rhs", &mut variables);
                 let dest = gen.alloca_tvalue("result");
                 let _success = gen.perform_binary_op("success", op_name, lhs, rhs, dest);
-
             }
             _ => unimplemented!("{stmt:?}"),
         }
@@ -165,15 +164,18 @@ fn expression_to_ptr<'ctx>(
             };
             *ptr
         }
-        Expression::BinOp { left, op, right } => {
-            emit_bin_op(gen, left, right, *op, vars)
-        }
+        Expression::BinOp { left, op, right } => emit_bin_op(gen, left, right, *op, vars),
         _ => unimplemented!("expression_to_ptr: {expr:?}"),
     }
 }
 
-
-fn emit_bin_op<'ctx>(gen: &CodeGenerator<'ctx>, left: &Expression, right: &Expression, op: BinaryOperator, vars: &mut HashMap<String, PointerValue<'ctx>>) -> PointerValue<'ctx> {
+fn emit_bin_op<'ctx>(
+    gen: &CodeGenerator<'ctx>,
+    left: &Expression,
+    right: &Expression,
+    op: BinaryOperator,
+    vars: &mut HashMap<String, PointerValue<'ctx>>,
+) -> PointerValue<'ctx> {
     use tvalue_names::math::*;
     let op_name = match op {
         BinaryOperator::Add => ADD,
