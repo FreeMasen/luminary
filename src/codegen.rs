@@ -20,7 +20,9 @@ pub struct CodeGenerator<'ctx> {
 
 struct ExpectedStructs<'ctx> {
     base: StructType<'ctx>,
+    #[allow(unused)]
     bool: StructType<'ctx>,
+    #[allow(unused)]
     number: StructType<'ctx>,
     string: StructType<'ctx>,
 }
