@@ -129,7 +129,6 @@ fn main() {
             };
             cmd
             .arg("-lm")
-                .arg("-no-pie")
                 .arg(tmp_o.path());
             let child = cmd.spawn().unwrap();
             let clang_outout = child.wait_with_output().unwrap();
@@ -173,7 +172,10 @@ fn run_llc(
 
 fn get_dest(dest: Option<&PathBuf>) -> Output {
     if let Some(dest) = dest {
-        Output::File(OpenOptions::new().create(true).append(true).open(dest).unwrap())
+        Output::File(OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(dest).unwrap())
     } else {
         Output::StdIo(std::io::stdout())
     }
