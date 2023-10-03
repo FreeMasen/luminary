@@ -99,18 +99,11 @@ jobs:
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1.8.3
-        with:
-          # The version of LLVM and Clang binaries to install.
-          version: 16
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
           cargo dist build ${{ needs.plan.outputs.tag-flag }} --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "cargo dist ran successfully"
-        env: 
-          LLVM_SYS_160_PREFIX: ${{ env.LLVM_PATH }}
       - id: cargo-dist
         name: Post-build
         # We force bash here just because github makes it really hard to get values up
