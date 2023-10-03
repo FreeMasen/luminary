@@ -80,8 +80,8 @@ impl<'ctx> ExpectedHelpers<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
         Self {
             print: module
-                .get_function(tvalue_names::test_names::PRINT_TVALUE)
-                .expect(tvalue_names::test_names::PRINT_TVALUE),
+                .get_function(tvalue_names::print_names::PRINT_TVALUE)
+                .expect(tvalue_names::print_names::PRINT_TVALUE),
         }
     }
 }

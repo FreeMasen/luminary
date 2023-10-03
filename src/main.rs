@@ -1,7 +1,13 @@
-use std::{path::{PathBuf, Path}, process::{Command, Stdio, Output as ChildOutput}, io::{Write, Stdout, Read}, fs::{File, OpenOptions}, fmt::Display};
+use std::{
+    fmt::Display,
+    fs::{File, OpenOptions},
+    io::{Read, Stdout, Write},
+    path::{Path, PathBuf},
+    process::{Command, Output as ChildOutput, Stdio},
+};
 
 use clap::{Parser, ValueEnum};
-use inkwell::{module::Module, context::Context};
+use inkwell::{context::Context, module::Module};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -34,31 +40,39 @@ impl Default for FileType {
 
 impl Display for FileType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            FileType::Asm => "asm",
-            FileType::Ll => "ll",
-            FileType::Bc => "bc",
-            FileType::Lib => "lib",
-            FileType::Exe => "exe",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                FileType::Asm => "asm",
+                FileType::Ll => "ll",
+                FileType::Bc => "bc",
+                FileType::Lib => "lib",
+                FileType::Exe => "exe",
+            }
+        )
     }
 }
 
 fn main() {
-    let Args { input, output, filetype } = Args::parse();
+    let Args {
+        input,
+        output,
+        filetype,
+    } = Args::parse();
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
-    
+
     match filetype {
         FileType::Ll => {
             let mut dest = get_dest(output.as_ref());
             dest.write_all(module.to_string().as_bytes()).unwrap();
-        },
+        }
         FileType::Bc => {
             let mut dest = get_dest(output.as_ref());
             let bc = module.write_bitcode_to_memory();
             dest.write_all(bc.as_slice()).unwrap();
-        },
+        }
         FileType::Asm => {
             let mut tmp_s_file = tempfile::Builder::new().suffix(".s").tempfile().unwrap();
             let llc_output = run_llc("asm", &module, tmp_s_file.path());
@@ -72,15 +86,15 @@ fn main() {
             } else {
                 let mut out = std::io::stdout();
                 loop {
-                    let mut buf = [0u8;4096];
+                    let mut buf = [0u8; 4096];
                     let size = tmp_s_file.read(&mut buf).unwrap();
                     if size == 0 {
                         break;
                     }
                     out.write_all(&buf[..size]).unwrap();
                 }
-            }            
-        },
+            }
+        }
         FileType::Lib => {
             let (output, tmp_file) = if let Some(dest_path) = output.as_ref() {
                 let output = run_llc("obj", &module, dest_path);
@@ -96,11 +110,11 @@ fn main() {
                 eprintln!("{}", String::from_utf8_lossy(&output.stderr));
                 std::process::exit(1);
             }
-            
+
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
-                    let mut buf = [0u8;4096];
+                    let mut buf = [0u8; 4096];
                     let size = tmp.read(&mut buf).unwrap();
                     if size == 0 {
                         break;
@@ -108,7 +122,7 @@ fn main() {
                     out.write_all(&buf[..size]).unwrap();
                 }
             }
-        },
+        }
         FileType::Exe => {
             let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
             let llc_output = run_llc("obj", &module, tmp_o.path());
@@ -127,9 +141,7 @@ fn main() {
                 cmd.arg(tmp_o.path());
                 Some(tmp2)
             };
-            cmd
-            .arg("-lm")
-                .arg(tmp_o.path());
+            cmd.arg("-lm").arg(tmp_o.path());
             let child = cmd.spawn().unwrap();
             let clang_outout = child.wait_with_output().unwrap();
             if !clang_outout.status.success() {
@@ -140,7 +152,7 @@ fn main() {
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
-                    let mut buf = [0u8;4096];
+                    let mut buf = [0u8; 4096];
                     let size = tmp.read(&mut buf).unwrap();
                     if size == 0 {
                         break;
@@ -148,18 +160,13 @@ fn main() {
                     out.write_all(&buf[..size]).unwrap();
                 }
             }
-        },
+        }
     }
 }
 
-fn run_llc(
-    file_type: &str,
-    module: &Module,
-    dest_path: &Path,
-) -> ChildOutput {
+fn run_llc(file_type: &str, module: &Module, dest_path: &Path) -> ChildOutput {
     let mut cmd = Command::new("llc");
-    cmd
-        .arg("-filetype")
+    cmd.arg("-filetype")
         .arg(file_type)
         .arg("-o")
         .arg(dest_path)
@@ -172,10 +179,13 @@ fn run_llc(
 
 fn get_dest(dest: Option<&PathBuf>) -> Output {
     if let Some(dest) = dest {
-        Output::File(OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(dest).unwrap())
+        Output::File(
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(dest)
+                .unwrap(),
+        )
     } else {
         Output::StdIo(std::io::stdout())
     }

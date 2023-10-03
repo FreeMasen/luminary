@@ -6,7 +6,6 @@ use std::{
 
 use inkwell::context::Context;
 use luminary::run_on;
-use tempfile::NamedTempFile;
 
 fn main() {
     let context = Context::create();
