@@ -113,7 +113,7 @@ jobs:
         if: runner.os == 'Macos'
         run: |
           brew install llvm@16 \
-          && echo 'LLVM_SYS_160_PREFIX="/usr/local/opt/llvm"' >> .env
+          && echo 'export LLVM_SYS_160_PREFIX="/usr/local/opt/llvm"' >> .env
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
