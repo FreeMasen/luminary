@@ -98,8 +98,11 @@ jobs:
         with:
           submodules: recursive
       - name: Install linux deps
-        if: contains(matrix.os 'ubuntu-latest')
+        if: ${{ contains(matrix.os, 'ubuntu') }}
         run: sudo apt install -y llvm-16
+      - name: "..."
+        if: ${{ !contains(matrix.os, 'ubuntu') }}
+        run: echo "$RUNNER_OS"
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
