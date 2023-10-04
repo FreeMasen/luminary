@@ -106,8 +106,7 @@ jobs:
       - name: Install Windows deps
         if: runner.os == 'Windows'
         run: |
-          choco install llvm --version=16.0.6; echo "LLVM_SYS_160_PREFIX="C:\Program Files\LLVM"" >> $GITHUB_ENV;
-          C:\Program Files\LLVM\bin\llvm-config.exe --prefix
+          choco install llvm --version=16.0.6;echo "LLVM_SYS_160_PREFIX="C:\Program Files\LLVM"" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
