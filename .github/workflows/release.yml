@@ -113,7 +113,7 @@ jobs:
         if: runner.os == 'Macos'
         run: |
           brew install llvm@16 \
-          && brew link llvm@10
+          && brew link llvm@16
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
