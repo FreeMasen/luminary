@@ -98,12 +98,12 @@ jobs:
         with:
           submodules: recursive
       - name: print os
-        run: echo "${{ matrix.os }}"
+        run: echo "${{ os }}"
       - name: Install linux deps
         if: ${{ contains(matrix.os, 'ubuntu') }}
         run: sudo apt install -y llvm-16
       - name: Install Macos deps
-        if: ${{ contains(matrix.os, 'darwin') }}
+        if: ${{ contains(os, 'darwin') }}
         run: brew install llvm@16
       - name: Install Windows deps
         if: ${{ contains(matrix.os, 'windows') }}
