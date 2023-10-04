@@ -102,7 +102,9 @@ jobs:
         run: sudo apt install -y llvm-16
       - name: "..."
         if: ${{ !contains(matrix.os, 'ubuntu') }}
-        run: echo "$RUNNER_OS"
+        run: echo "$MATRIX_OS"
+        env:
+          MATRIX_OS: ${{ matrix.os }}
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
