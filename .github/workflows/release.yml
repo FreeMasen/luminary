@@ -106,7 +106,7 @@ jobs:
       - name: Install Windows deps
         if: runner.os == 'Windows'
         run: |
-          (choco install llvm --version=16.0.6) -and llvm-config --prefix
+          (choco install llvm --version=16.0.6) -and (llvm-config --prefix)
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
