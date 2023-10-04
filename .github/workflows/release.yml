@@ -105,7 +105,9 @@ jobs:
           && sudo ./llvm.sh 16 all
       - name: Install MacOs deps
         if: runner.os == 'Macos'
-        run: brew install llvm@16
+        run: |
+          brew install llvm@16 \
+          && echo LLVM_SYS_160_PREFIX="/usr/local/opt/llvm" >> .env
       - name: Install Windows deps
         if: runner.os == 'Windows'
         run: choco install llvm --version=16.0.6
