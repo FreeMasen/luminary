@@ -97,10 +97,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: print os
-        run: echo "${{ os }}"
       - name: Install linux deps
-        if: ${{ contains(matrix.os, 'ubuntu') }}
+        if: ${{ contains(matrix.os, 'Linux') }}
         run: sudo apt install -y llvm-16
       - name: Install Macos deps
         if: ${{ contains(os, 'darwin') }}
