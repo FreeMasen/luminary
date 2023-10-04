@@ -107,7 +107,9 @@ jobs:
         if: runner.os == 'Macos'
         run: |
           brew install llvm@16 \
-          && echo LLVM_SYS_160_PREFIX="/usr/local/opt/llvm" >> $GITHUB_ENV
+          && find /usr/local /opt -name llvm-config 2> /dev/null | grep 16 \
+          && echo LLVM_SYS_160_PREFIX="$(bash -c "$(find /usr/local /opt -name llvm-config 2>/dev/null) --prefix")" >> $GITHUB_ENV
+      
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
