@@ -57,15 +57,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install linux deps
-        if: ${{ contains(matrix.os, 'ubuntu') }}
-        run: sudo apt install -y llvm-16
-      - name: Install Macos deps
-        if: ${{ contains(matrix.os, 'ubuntu') }}
-        run: brew install llvm@16
-      - name: Install Windows deps
-        if: ${{ contains(matrix.os, 'ubuntu') }}
-        run: choco install llvm --version=16.0.6
+      
       - name: Install cargo-dist
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.4.0/cargo-dist-installer.sh | sh"
       - id: plan
