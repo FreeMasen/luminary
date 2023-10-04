@@ -106,7 +106,7 @@ jobs:
       - name: Install Windows deps
         if: runner.os == 'Windows'
         run: |
-          choco install llvm --version=16.0.6; Get-Childitem -Path C:\ProgramData\chocolatey -Recurse -ErrorAction SilentlyContinue
+          choco install llvm --version=16.0.6; Get-Childitem -Path C:\ProgramData\chocolatey\lib\llvm -Recurse -ErrorAction SilentlyContinue
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
