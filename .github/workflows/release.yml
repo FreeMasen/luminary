@@ -99,7 +99,7 @@ jobs:
           submodules: recursive
       - name: Install linux deps
         if: runner.os == 'Linux'
-        run: sudo apt install -y llvm-16
+        run: sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
