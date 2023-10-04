@@ -104,8 +104,11 @@ jobs:
           && chmod +x llvm.sh \
           && sudo ./llvm.sh 16 all
       - name: Install MacOs deps
-        if: runner.os == 'Darwin'
+        if: runner.os == 'Macos'
         run: brew install llvm@16
+      - name: Install Windows deps
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=16.0.6
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
