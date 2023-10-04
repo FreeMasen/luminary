@@ -113,7 +113,7 @@ jobs:
         if: runner.os == 'Macos'
         run: |
           brew install llvm@16 \
-          && echo "/usr/local/opt/llvm/bin:$GITHUB_PATH" > $GITHUB_PATH
+          && echo LLVM_SYS_160_PREFIX="/usr/local/opt/llvm" >> .env
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
