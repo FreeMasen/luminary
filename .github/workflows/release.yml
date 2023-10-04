@@ -100,12 +100,6 @@ jobs:
       - name: Install linux deps
         if: ${{ contains(matrix.os, 'Linux') }}
         run: sudo apt install -y llvm-16
-      - name: Install Macos deps
-        if: ${{ contains(os, 'darwin') }}
-        run: brew install llvm@16
-      - name: Install Windows deps
-        if: ${{ contains(matrix.os, 'windows') }}
-        run: choco install llvm --version=16.0.6
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
