@@ -98,7 +98,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install linux deps
-        if: matrix.os == 'ubuntu-latest'
+        if: contains(matrix.os 'ubuntu-latest')
         run: sudo apt install -y llvm-16
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
