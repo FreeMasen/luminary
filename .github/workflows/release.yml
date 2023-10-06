@@ -103,11 +103,11 @@ jobs:
         with:
           # The version of LLVM and Clang binaries to install.
           version: 16
-      - name: Install MacOs deps
+      - name: Install LLVM and Clang
         if: runner.os == 'Macos'
         uses: KyleMayes/install-llvm-action@v1.8.3
         with:
-          download-url: https://github.com/FreeMasen/llvm-builds/releases/download/
+          download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
           # The version of LLVM and Clang binaries to install.
           version: 16.0.6
