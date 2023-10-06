@@ -105,11 +105,15 @@ jobs:
           version: 16
       - name: Install MacOs deps
         if: runner.os == 'Macos'
-        run: |
-          brew install llvm@16 \
-          && find /usr/local /opt -name llvm-config 2> /dev/null | grep 16 \
-          && echo LLVM_SYS_160_PREFIX="$(bash -c "$(find /usr/local /opt -name llvm-config 2>/dev/null) --prefix")" >> $GITHUB_ENV
-      
+        uses: KyleMayes/install-llvm-action@v1.8.3
+        with:
+          download-url: https://github.com/FreeMasen/llvm-builds/releases/download/
+          force-version: true
+          # The version of LLVM and Clang binaries to install.
+          version: 16.0.6
+      - name: check uname
+        run: uname -a
+        if: runner.os == 'Macos'
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
