@@ -2,12 +2,20 @@ use std::{
     fmt::Display,
     fs::{File, OpenOptions},
     io::{Read, Stdout, Write},
-    path::{Path, PathBuf},
-    process::{Command, Output as ChildOutput, Stdio},
+    path::PathBuf,
+    process::Command,
 };
 
 use clap::{Parser, ValueEnum};
-use inkwell::{context::Context, module::Module, targets::{TargetMachine, Target, InitializationConfig, RelocMode, CodeModel, FileType as LlvmFileType}, OptimizationLevel, memory_buffer::MemoryBuffer};
+use inkwell::{
+    context::Context,
+    memory_buffer::MemoryBuffer,
+    module::Module,
+    targets::{
+        CodeModel, FileType as LlvmFileType, InitializationConfig, RelocMode, Target, TargetMachine,
+    },
+    OptimizationLevel,
+};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -84,7 +92,7 @@ fn main() {
         }
         FileType::Lib => {
             let obj = run_llc(LlvmFileType::Object, &module);
-            
+
             if let Some(dest_path) = output.as_ref() {
                 std::fs::write(dest_path, obj.as_slice()).unwrap();
             } else {
@@ -147,7 +155,9 @@ fn run_llc(file_type: LlvmFileType, module: &Module) -> MemoryBuffer {
     let cpu = cpu.to_str().unwrap();
     let features = TargetMachine::get_host_cpu_features();
     let features = features.to_str().unwrap();
-    let machine = target.create_target_machine(&trip, cpu, features, opt, reloc, model).unwrap();
+    let machine = target
+        .create_target_machine(&trip, cpu, features, opt, reloc, model)
+        .unwrap();
     machine.write_to_memory_buffer(module, file_type).unwrap()
 }
 

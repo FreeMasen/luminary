@@ -1,6 +1,6 @@
 [package]
 name = "luminary"
-version = "0.1.0"
+version = "0.1.0-pre1"
 edition = "2021"
 repository = "https://github.com/FreeMasen/luminary"
 
