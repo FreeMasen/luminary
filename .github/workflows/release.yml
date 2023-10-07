@@ -103,6 +103,12 @@ jobs:
         with:
           version: 16
       - name: Install LLVM and Clang
+        if: runner.os == 'Windows'
+        uses: KyleMayes/install-llvm-action@v1.8.3
+        with:
+          directory: C:\LLVM
+          version: 16
+      - name: Install LLVM and Clang
         if: runner.os == 'Macos'
         uses: KyleMayes/install-llvm-action@v1.8.3
         with:
