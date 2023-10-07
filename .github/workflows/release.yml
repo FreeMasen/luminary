@@ -123,6 +123,7 @@ jobs:
           force-version: true
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
+<<<<<<< HEAD
       - name: update llvm-sys env var (MacOS)
         if: runner.os == 'Macos'
         run: echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
@@ -136,6 +137,21 @@ jobs:
         run:  |
           $var = C:\LLVM\bin\llvm-config --prefix
           echo "LLVM_SYS_160_PREFIX=$var" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+=======
+      - name: update llvm-sys env var
+        if: runner.os != 'Windows'
+        run: |
+          ls $GITHUB_WORKSPACE/llvm/bin
+          $GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix
+          $GITHUB_WORKSPACE/llvm/bin/llvm-config --version
+          echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
+      - name: update llvm-sys env var
+        if: runner.os == 'Windows'
+        run:  |
+          ls C:\LLVM\bin
+          $var = "LLVM_SYS_160_PREFIX=C:\LLVM"
+          echo "$var" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+>>>>>>> 3aa31b9 (windows uses choco)
         shell: pwsh
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'

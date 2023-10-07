@@ -34,7 +34,10 @@ targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows
 pr-run-mode = "upload"
 # Skip checking whether the specified configuration files are up to date
 allow-dirty = ["ci"]
+<<<<<<< HEAD
 # Disable the c runtime static linking for Windows releases, this means that users will need
 # to provide their own crt when running the outputed binary
 # TODO: remove this some day
 msvc-crt-static = false
+=======
+>>>>>>> 3aa31b9 (windows uses choco)
