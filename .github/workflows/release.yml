@@ -110,17 +110,17 @@ jobs:
           force-version: true
           version: 16.0.6
       - name: update llvm-sys env var
+        if: runner.os != 'Windows'
         run: |
           echo "LLVM_SYS_160_PREFIX="$LLVM_PATH"" >> "$GITHUB_ENV" \s
            && echo "PATH=$PATH:$LLVM_PATH/bin" >> "$GITHUB_ENV" \
-           && find / -name=llvm-config 2> /dev/null
-        if: runner.os != 'Windows'
+           && find / -name="llvm-config"
       - name: update llvm-sys env var
+        if: runner.os == 'Windows'
         run:  |
           $val = "$Env:LLVM_PATH"
           $var = "LLVM_SYS_160_PREFIX=$val"
           echo "$var" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        if: runner.os == 'Windows'
         shell: pwsh
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
