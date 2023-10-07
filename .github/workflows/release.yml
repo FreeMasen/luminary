@@ -101,7 +101,6 @@ jobs:
         if: runner.os == 'Linux' || runner.os == 'Windows'
         uses: KyleMayes/install-llvm-action@v1.8.3
         with:
-          # The version of LLVM and Clang binaries to install.
           version: 16
       - name: Install LLVM and Clang
         if: runner.os == 'Macos'
@@ -109,11 +108,9 @@ jobs:
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
-          # The version of LLVM and Clang binaries to install.
           version: 16.0.6
-      - name: check uname
-        run: uname -a
-        if: runner.os == 'Macos'
+      - name: update llvm-sys env var
+        run: echo "LLVM_SYS_160_PREFIX=$LLVM_PATH" >> "$GITHUB_ENV"
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
