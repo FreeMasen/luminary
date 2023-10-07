@@ -110,7 +110,9 @@ jobs:
           force-version: true
           version: 16.0.6
       - name: update llvm-sys env var
-        run: echo "LLVM_SYS_160_PREFIX="$LLVM_PATH"" >> "$GITHUB_ENV"
+        run: |
+          echo "LLVM_SYS_160_PREFIX="$LLVM_PATH"" >> "$GITHUB_ENV"
+          echo "PATH=$PATH:$LLVM_PATH/bin"
         if: runner.os != 'Windows'
       - name: update llvm-sys env var
         run:  |
