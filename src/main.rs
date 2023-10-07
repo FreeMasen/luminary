@@ -7,7 +7,7 @@ use std::{
 };
 
 use clap::{Parser, ValueEnum};
-use inkwell::{context::Context, module::Module};
+use inkwell::{context::Context, module::Module, targets::{TargetMachine, Target, InitializationConfig, RelocMode, CodeModel, FileType as LlvmFileType}, OptimizationLevel, memory_buffer::MemoryBuffer};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -74,63 +74,28 @@ fn main() {
             dest.write_all(bc.as_slice()).unwrap();
         }
         FileType::Asm => {
-            let mut tmp_s_file = tempfile::Builder::new().suffix(".s").tempfile().unwrap();
-            let llc_output = run_llc("asm", &module, tmp_s_file.path());
-            if !llc_output.status.success() {
-                println!("{}", String::from_utf8_lossy(&llc_output.stdout));
-                eprintln!("{}", String::from_utf8_lossy(&llc_output.stderr));
-                std::process::exit(1);
-            }
+            let obj = run_llc(LlvmFileType::Assembly, &module);
             if let Some(dest_path) = output.as_ref() {
-                std::fs::copy(tmp_s_file.path(), dest_path).unwrap();
+                std::fs::write(dest_path, obj.as_slice()).unwrap();
             } else {
                 let mut out = std::io::stdout();
-                loop {
-                    let mut buf = [0u8; 4096];
-                    let size = tmp_s_file.read(&mut buf).unwrap();
-                    if size == 0 {
-                        break;
-                    }
-                    out.write_all(&buf[..size]).unwrap();
-                }
+                out.write_all(obj.as_slice()).unwrap();
             }
         }
         FileType::Lib => {
-            let (output, tmp_file) = if let Some(dest_path) = output.as_ref() {
-                let output = run_llc("obj", &module, dest_path);
-                (output, None)
+            let obj = run_llc(LlvmFileType::Object, &module);
+            
+            if let Some(dest_path) = output.as_ref() {
+                std::fs::write(dest_path, obj.as_slice()).unwrap();
             } else {
-                let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
-                let output = run_llc("obj", &module, tmp_o.path());
-                (output, Some(tmp_o))
-            };
-
-            if !output.status.success() {
-                println!("{}", String::from_utf8_lossy(&output.stdout));
-                eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-                std::process::exit(1);
-            }
-
-            if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
-                loop {
-                    let mut buf = [0u8; 4096];
-                    let size = tmp.read(&mut buf).unwrap();
-                    if size == 0 {
-                        break;
-                    }
-                    out.write_all(&buf[..size]).unwrap();
-                }
+                out.write_all(obj.as_slice()).unwrap();
             }
         }
         FileType::Exe => {
+            let obj = run_llc(LlvmFileType::Object, &module);
             let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
-            let llc_output = run_llc("obj", &module, tmp_o.path());
-            if !llc_output.status.success() {
-                println!("{}", String::from_utf8_lossy(&llc_output.stdout));
-                eprintln!("{}", String::from_utf8_lossy(&llc_output.stderr));
-                std::process::exit(1);
-            }
+            std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
             let mut cmd = Command::new("clang");
             cmd.arg("-o");
             let tmp_file = if let Some(dest_path) = output.as_ref() {
@@ -164,17 +129,26 @@ fn main() {
     }
 }
 
-fn run_llc(file_type: &str, module: &Module, dest_path: &Path) -> ChildOutput {
-    let mut cmd = Command::new("llc");
-    cmd.arg("-filetype")
-        .arg(file_type)
-        .arg("-o")
-        .arg(dest_path)
-        .stdin(Stdio::piped());
-    let mut cmp_task = cmd.spawn().expect("llc");
-    let stdin = cmp_task.stdin.as_mut().expect("stdin");
-    stdin.write_all(module.to_string().as_bytes()).unwrap();
-    cmp_task.wait_with_output().unwrap()
+fn run_llc(file_type: LlvmFileType, module: &Module) -> MemoryBuffer {
+    let trip = TargetMachine::get_default_triple();
+    Target::initialize_all(&InitializationConfig {
+        asm_parser: true,
+        asm_printer: true,
+        base: true,
+        disassembler: false,
+        info: true,
+        machine_code: true,
+    });
+    let target = Target::from_triple(&trip).unwrap();
+    let opt = OptimizationLevel::default();
+    let reloc = RelocMode::Default;
+    let model = CodeModel::Default;
+    let cpu = TargetMachine::get_host_cpu_name();
+    let cpu = cpu.to_str().unwrap();
+    let features = TargetMachine::get_host_cpu_features();
+    let features = features.to_str().unwrap();
+    let machine = target.create_target_machine(&trip, cpu, features, opt, reloc, model).unwrap();
+    machine.write_to_memory_buffer(module, file_type).unwrap()
 }
 
 fn get_dest(dest: Option<&PathBuf>) -> Output {
