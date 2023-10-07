@@ -116,7 +116,9 @@ jobs:
         if: runner.os != 'Windows'
       - name: update llvm-sys env var
         run:  |
-          echo "LLVM_SYS_160_PREFIX="$Env:LLVM_PATH"" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          $val = "$Env:LLVM_PATH"
+          $var = "LLVM_SYS_160_PREFIX=$val"
+          echo "$var" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         if: runner.os == 'Windows'
         shell: pwsh
       - uses: swatinem/rust-cache@v2
