@@ -98,7 +98,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install LLVM and Clang
-        if: runner.os == 'Linux' || runner.os == 'Windows'
+        if: runner.os == 'Linux'
         uses: KyleMayes/install-llvm-action@v1.8.3
         with:
           version: 16
