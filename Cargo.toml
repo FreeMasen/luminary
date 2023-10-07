@@ -38,6 +38,3 @@ targets = [
 # Publish jobs to run in CI
 pr-run-mode = "upload"
 allow-dirty = ["ci"]
-dependencies.homebrew.llvm = "16"
-dependencies.apt.llvm = "16"
-dependencies.chocolatey.llvm = "16"

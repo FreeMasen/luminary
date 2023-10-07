@@ -102,6 +102,7 @@ jobs:
         uses: KyleMayes/install-llvm-action@v1.8.3
         with:
           version: 16
+          directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang
         if: runner.os == 'Windows'
         uses: KyleMayes/install-llvm-action@v1.8.3
@@ -115,17 +116,19 @@ jobs:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
           version: 16.0.6
+          directory: ${{ github.workspace }}/llvm
       - name: update llvm-sys env var
         if: runner.os != 'Windows'
         run: |
-          echo "LLVM_SYS_160_PREFIX="$LLVM_PATH"" >> "$GITHUB_ENV" \
-           && echo "PATH=$PATH:$LLVM_PATH/bin" >> "$GITHUB_ENV" \
-           && find / -name llvm-config
+          ls $GITHUB_WORKSPACE/llvm/bin
+          $GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix
+          $GITHUB_WORKSPACE/llvm/bin/llvm-config --version
+          echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
       - name: update llvm-sys env var
         if: runner.os == 'Windows'
         run:  |
-          $val = "$Env:LLVM_PATH"
-          $var = "LLVM_SYS_160_PREFIX=$val"
+          ls C:\LLVM\bin
+          $var = "LLVM_SYS_160_PREFIX=C:\LLVM"
           echo "$var" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         shell: pwsh
       - uses: swatinem/rust-cache@v2
