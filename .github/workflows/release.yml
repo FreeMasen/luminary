@@ -114,7 +114,7 @@ jobs:
         run: |
           echo "LLVM_SYS_160_PREFIX="$LLVM_PATH"" >> "$GITHUB_ENV" \
            && echo "PATH=$PATH:$LLVM_PATH/bin" >> "$GITHUB_ENV" \
-           && find / -name="llvm-config"
+           && find / -name llvm-config
       - name: update llvm-sys env var
         if: runner.os == 'Windows'
         run:  |
