@@ -145,7 +145,7 @@ jobs:
       - name: update llvm-sys env var
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install build-essential gcc c++
+          sudo apt-get install build-essential
           $GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix
           $GITHUB_WORKSPACE/llvm/bin/llvm-config --version
           echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
