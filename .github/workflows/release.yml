@@ -103,6 +103,7 @@ jobs:
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
+          # ubuntu-version: 20.04
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang
@@ -126,8 +127,7 @@ jobs:
           directory: ${{ github.workspace }}/llvm
       - name: update llvm-sys env var
         if: runner.os == 'Macos'
-        run: |
-          echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
+        run: echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
       - name: update llvm-sys env var
         if: runner.os == 'Linux'
         run: |
