@@ -2,7 +2,7 @@ use std::{
     fmt::Display,
     fs::{File, OpenOptions},
     io::{Read, Stdout, Write},
-    path::PathBuf,
+    path::{PathBuf, Path},
     process::Command,
 };
 
@@ -107,24 +107,14 @@ fn main() {
             let obj = run_llc(LlvmFileType::Object, &module, opt);
             let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
             std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
-            let mut cmd = Command::new("clang");
-            cmd.arg("-o");
-            let tmp_file = if let Some(dest_path) = output.as_ref() {
-                cmd.arg(dest_path);
-                None
+            
+            let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
+                (dest_path.clone(), None)
             } else {
                 let tmp2 = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
-                cmd.arg(tmp_o.path());
-                Some(tmp2)
+                (tmp2.path().to_owned(), Some(tmp2))
             };
-            cmd.arg("-lm").arg(tmp_o.path());
-            let child = cmd.spawn().unwrap();
-            let clang_outout = child.wait_with_output().unwrap();
-            if !clang_outout.status.success() {
-                println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
-                eprintln!("{}", String::from_utf8_lossy(&clang_outout.stderr));
-                std::process::exit(1);
-            }
+            link_exe(tmp_o.path(), &dest);
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
@@ -137,6 +127,57 @@ fn main() {
                 }
             }
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn link_exe(obj_path: &Path, dest: &PathBuf) {
+    let mut cmd = Command::new("ld");
+    cmd
+        .arg(obj_path)
+        .arg("/lib/x86_64-linux-gnu/Scrt1.o")
+        .arg("-o").arg(dest)
+        .arg("-pie")
+        .arg("-z").arg("relro")
+        .arg("--hash-style=gnu")
+        .arg("--build-id")
+        .arg("--eh-frame-hdr")
+        .arg("-m").arg("elf_x86_64")
+        .arg("-dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2")
+        .arg("-L").arg("/usr/lib/x86_64-linux-gnu")
+        .arg("-l").arg("m")
+        .arg("-l").arg("c");
+    let child = cmd.spawn().unwrap();
+    let ld_outout = child.wait_with_output().unwrap();
+    if !ld_outout.status.success() {
+        println!("LDOUT: {}", String::from_utf8_lossy(&ld_outout.stdout));
+        eprintln!("LDERR: {}", String::from_utf8_lossy(&ld_outout.stderr));
+        std::process::exit(1);
+    } else if !ld_outout.stdout.is_empty() {
+        println!("{}", String::from_utf8_lossy(&ld_outout.stdout));
+
+    }
+}
+
+
+
+#[cfg(not(target_os = "linux"))]
+fn link_exe(obj_path: &Path, dest: &PathBuf) {
+    let mut cmd = Command::new("clang");
+    cmd.arg("-o").arg(dest);
+    if std::env::var("LUMINARY_USE_VERBOSE_CLANG").map(|s| !s.is_empty() && s != "0").unwrap_or(false) {
+        cmd.arg("--verbose");
+    }
+    cmd.arg("-lm").arg(obj_path);
+    let child = cmd.spawn().unwrap();
+    let clang_outout = child.wait_with_output().unwrap();
+    if !clang_outout.status.success() {
+        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
+        eprintln!("{}", String::from_utf8_lossy(&clang_outout.stderr));
+        std::process::exit(1);
+    } else {
+        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
+
     }
 }
 
