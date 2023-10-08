@@ -14,3 +14,5 @@
 /test-ir
 *.out
 /early_example.*
+/ee
+/ee.*

@@ -24,6 +24,8 @@ struct Args {
     output: Option<PathBuf>,
     #[arg(long, default_value_t = FileType::Exe)]
     filetype: FileType,
+    #[arg(long, short='O', default_value_t = 0)]
+    opt: u8,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -67,6 +69,7 @@ fn main() {
         input,
         output,
         filetype,
+        opt,
     } = Args::parse();
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
@@ -82,7 +85,7 @@ fn main() {
             dest.write_all(bc.as_slice()).unwrap();
         }
         FileType::Asm => {
-            let obj = run_llc(LlvmFileType::Assembly, &module);
+            let obj = run_llc(LlvmFileType::Assembly, &module, opt);
             if let Some(dest_path) = output.as_ref() {
                 std::fs::write(dest_path, obj.as_slice()).unwrap();
             } else {
@@ -91,7 +94,7 @@ fn main() {
             }
         }
         FileType::Lib => {
-            let obj = run_llc(LlvmFileType::Object, &module);
+            let obj = run_llc(LlvmFileType::Object, &module, opt);
 
             if let Some(dest_path) = output.as_ref() {
                 std::fs::write(dest_path, obj.as_slice()).unwrap();
@@ -101,7 +104,7 @@ fn main() {
             }
         }
         FileType::Exe => {
-            let obj = run_llc(LlvmFileType::Object, &module);
+            let obj = run_llc(LlvmFileType::Object, &module, opt);
             let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
             std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
             let mut cmd = Command::new("clang");
@@ -137,7 +140,7 @@ fn main() {
     }
 }
 
-fn run_llc(file_type: LlvmFileType, module: &Module) -> MemoryBuffer {
+fn run_llc(file_type: LlvmFileType, module: &Module, opt: u8) -> MemoryBuffer {
     let trip = TargetMachine::get_default_triple();
     Target::initialize_all(&InitializationConfig {
         asm_parser: true,
@@ -148,7 +151,12 @@ fn run_llc(file_type: LlvmFileType, module: &Module) -> MemoryBuffer {
         machine_code: true,
     });
     let target = Target::from_triple(&trip).unwrap();
-    let opt = OptimizationLevel::default();
+    let opt = match opt {
+        0 => OptimizationLevel::None,
+        1 => OptimizationLevel::Less,
+        2 => OptimizationLevel::Aggressive,
+        _ => OptimizationLevel::Default,
+    };
     let reloc = RelocMode::Default;
     let model = CodeModel::Default;
     let cpu = TargetMachine::get_host_cpu_name();
