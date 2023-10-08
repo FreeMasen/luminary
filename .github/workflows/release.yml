@@ -101,7 +101,9 @@ jobs:
         if: runner.os == 'Linux'
         uses: KyleMayes/install-llvm-action@v1.8.3
         with:
-          version: 16
+          download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
+          force-version: true
+          version: 16.0.6
           directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang
         if: runner.os == 'Windows'
