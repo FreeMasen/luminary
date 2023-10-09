@@ -99,11 +99,11 @@ jobs:
           submodules: recursive
       - name: Install LLVM and Clang
         if: runner.os == 'Linux'
-        uses: KyleMayes/install-llvm-action@v1.8.3
+        uses: FreeMasen/install-llvm-action@v4
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
-          # ubuntu-version: 20.04
+          ubuntu-version: 20.04
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang
