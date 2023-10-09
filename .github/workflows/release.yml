@@ -104,11 +104,7 @@ jobs:
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
-<<<<<<< HEAD
           ubuntu-version: 20.04
-=======
-          # ubuntu-version: 20.04
->>>>>>> 67317dc (set ubuntu-version)
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang (Windows)
