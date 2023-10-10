@@ -3,7 +3,7 @@ use analisar::aware::ast::{
     Args, Block, ExpListItem, Expression, Field, FuncBody, FunctionCall, Statement, Table,
 };
 use lex_lua::Span;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 pub struct Visitor {
     pub symbol_table: HashMap<String, Symbol>,

@@ -10,6 +10,7 @@ use inkwell::{context::Context, module::Module, values::PointerValue};
 use tvalue::tvalue_names;
 pub mod bytecode;
 pub mod codegen;
+pub mod symbol_table;
 pub mod tvalue;
 
 #[derive(Debug)]
