@@ -7,6 +7,7 @@ repository = "https://github.com/FreeMasen/luminary"
 [dependencies]
 analisar = "0.2"
 clap = { version = "4.4", features = [ "derive" ] }
+indexmap = "2"
 inkwell = { version = "0.2", features = ["llvm16-0"] }
 lex_lua = "0.1.9"
 tempfile = "3.8"
