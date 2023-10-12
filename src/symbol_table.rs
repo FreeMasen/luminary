@@ -181,17 +181,22 @@ impl Debug for SymbolTableVisitor {
 
 impl SymbolTableVisitor {
     pub fn visit_stmt(&mut self, stmt: &Statement) {
-        Self::visit_stmt_continued(self.global.clone(), self.module.clone(), stmt)
+        Self::visit_stmt_continued(
+            self.global.clone(),
+            self.module.clone(), 
+            &mut self.scopes,
+            stmt)
     }
     fn visit_stmt_continued(
         global: Rc<RefCell<SymbolTable>>,
         current: Rc<RefCell<SymbolTable>>,
+        scopes: &mut Vec<Rc<RefCell<SymbolTable>>>,
         stmt: &Statement,
     ) {
         match stmt {
             Statement::Empty(_) => {}
             Statement::Expression(expr) => {
-                Self::visit_expr_stmt_continued(global.clone(), current.clone(), expr)
+                Self::visit_expr_stmt_continued(global.clone(), current.clone(), scopes, expr)
             }
             Statement::Assignment {
                 local_span,
@@ -201,6 +206,7 @@ impl SymbolTableVisitor {
             } => Self::visit_assignment_continued(
                 global.clone(),
                 current.clone(),
+                scopes,
                 local_span.as_ref(),
                 targets,
                 values,
@@ -216,47 +222,39 @@ impl SymbolTableVisitor {
                 );
             }
             Statement::Break(_) => todo!(),
-            Statement::GoTo { goto_span, label } => todo!(),
+            Statement::GoTo { .. } => todo!(),
             Statement::Do {
-                do_span,
                 block,
-                end_span,
+                ..
             } => {
-                let _do_scope = SymbolTable::default();
+                let mut do_scope = SymbolTable::default();
+                do_scope.parent = Some(current.clone());
+                let do_scope = Rc::new(RefCell::new(do_scope));
+                for stmt in block.0.iter() {
+                    Self::visit_stmt_continued(global.clone(), do_scope.clone(), scopes, stmt);
+                }
+                scopes.push(do_scope);
             }
             Statement::While {
-                while_span,
-                exp,
-                do_span,
-                block,
-                end_span,
+                ..
             } => todo!(),
             Statement::Repeat {
-                repeat_span,
-                block,
-                until_span,
-                exp,
+                ..
             } => todo!(),
             Statement::If(_) => todo!(),
             Statement::For(_) => todo!(),
             Statement::ForIn(_) => todo!(),
             Statement::Function {
-                local,
-                function,
-                name,
-                body,
+                ..
             } => todo!(),
             Statement::Return(_) => todo!(),
         }
     }
 
-    fn visit_expr_stmt(&mut self, expr: &Expression) {
-        Self::visit_expr_stmt_continued(self.global.clone(), self.module.clone(), expr)
-    }
-
     fn visit_expr_stmt_continued(
         global: Rc<RefCell<SymbolTable>>,
         current: Rc<RefCell<SymbolTable>>,
+        scopes: &mut Vec<Rc<RefCell<SymbolTable>>>,
         expr: &Expression,
     ) {
         match expr {
@@ -269,35 +267,19 @@ impl SymbolTableVisitor {
             Expression::VarArgs(_) => todo!(),
             Expression::FunctionDef(_) => todo!(),
             Expression::TableCtor(_) => todo!(),
-            Expression::Parened {
-                open_span,
-                expr,
-                close_span,
+            Expression::Parened {..
             } => todo!(),
-            Expression::BinOp { left, op, right } => todo!(),
-            Expression::UnaryOp { op, exp } => todo!(),
+            Expression::BinOp { ..} => todo!(),
+            Expression::UnaryOp { .. } => todo!(),
             Expression::FuncCall(_) => todo!(),
             Expression::Suffixed(_) => todo!(),
         }
     }
 
-    fn visit_assignment(
-        &mut self,
-        local_span: Option<&Span>,
-        targets: &[ExpListItem],
-        values: &[ExpListItem],
-    ) {
-        Self::visit_assignment_continued(
-            self.global.clone(),
-            self.module.clone(),
-            local_span,
-            targets,
-            values,
-        )
-    }
     fn visit_assignment_continued(
         global: Rc<RefCell<SymbolTable>>,
         current: Rc<RefCell<SymbolTable>>,
+        scopes: &mut Vec<Rc<RefCell<SymbolTable>>>,
         local_span: Option<&Span>,
         targets: &[ExpListItem],
         values: &[ExpListItem],
@@ -318,7 +300,7 @@ impl SymbolTableVisitor {
                 .next()
                 .unwrap_or_else(|| NIL_EXPR);
 
-            let value = Self::visit_assignment_source(global.clone(), current.clone(), value);
+            let value = Self::visit_assignment_source(global.clone(), current.clone(),scopes, value);
             match target {
                 Expression::Name(name) => {
                     if local_span.is_some() {
@@ -352,6 +334,7 @@ impl SymbolTableVisitor {
     fn visit_assignment_source(
         global_scope: Rc<RefCell<SymbolTable>>,
         current_scope: Rc<RefCell<SymbolTable>>,
+        scopes: &mut Vec<Rc<RefCell<SymbolTable>>>,
         value: &Expression,
     ) -> SymbolValue {
         match value {
@@ -375,6 +358,7 @@ impl SymbolTableVisitor {
                 let args = Rc::new(RefCell::new(Vec::new()));
                 let scope = Rc::new(RefCell::new(SymbolTable::default()));
                 scope.borrow_mut().parent = Some(current_scope.clone());
+                scopes.push(scope.clone());
                 for v in &def.par_list.parts {
                     match v {
                         ParListPart::Comma(_) => continue,
@@ -389,7 +373,7 @@ impl SymbolTableVisitor {
                     }
                 }
                 for stmt in &def.block.0 {
-                    Self::visit_stmt_continued(global_scope.clone(), scope.clone(), stmt)
+                    Self::visit_stmt_continued(global_scope.clone(), scope.clone(), scopes, stmt)
                 }
                 SymbolValue::FunctionDecl { args, scope }
             }
@@ -410,6 +394,7 @@ impl SymbolTableVisitor {
                             let v = Self::visit_assignment_source(
                                 current_scope.clone(),
                                 t.clone(),
+                                scopes,
                                 value,
                             );
                             let entry = SymbolTableEntry {
@@ -423,6 +408,7 @@ impl SymbolTableVisitor {
                             let value = Self::visit_assignment_source(
                                 current_scope.clone(),
                                 t.clone(),
+                                scopes,
                                 value,
                             );
                             let symbol = format!("::{}::", idx);
@@ -438,7 +424,7 @@ impl SymbolTableVisitor {
                 SymbolValue::TableLit(t)
             }
             Expression::Parened { expr, .. } => {
-                Self::visit_assignment_source(global_scope, current_scope, &*expr)
+                Self::visit_assignment_source(global_scope, current_scope, scopes, &*expr)
             }
             Expression::BinOp { left, op, right } => {
                 todo!()
@@ -475,6 +461,11 @@ g = function(a, b, c)
 end
 f = e
 h = { a = 1, b = b, c = "jeez" }
+do
+    local a = 1
+    local b = "2"
+    local c = false
+end
 "#;
         let mut parser = analisar::aware::Parser::new(lua.as_bytes());
         let mut visitor = SymbolTableVisitor::default();
