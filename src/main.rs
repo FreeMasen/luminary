@@ -166,9 +166,9 @@ fn link_exe(obj_path: &Path, dest: &PathBuf) {
 
 #[cfg(not(target_os = "linux"))]
 fn link_exe(obj_path: &Path, dest: &PathBuf) {
-    let mut cmd = Command::new("clang");
+    let mut cmd = Command::new("cc");
     cmd.arg("-o").arg(dest);
-    if std::env::var("LUMINARY_USE_VERBOSE_CLANG")
+    if std::env::var("LUMINARY_USE_VERBOSE_CC")
         .map(|s| !s.is_empty() && s != "0")
         .unwrap_or(false)
     {
@@ -182,7 +182,12 @@ fn link_exe(obj_path: &Path, dest: &PathBuf) {
         eprintln!("{}", String::from_utf8_lossy(&clang_outout.stderr));
         std::process::exit(1);
     } else {
-        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
+        if !clang_outout.stdout.is_empty() {
+            println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
+        }
+        if !clang_outout.stderr.is_empty() {
+            eprintln!("{}", String::from_utf8_lossy(&clang_outout.stderr));
+        }
     }
 }
 
