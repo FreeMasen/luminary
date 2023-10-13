@@ -75,7 +75,7 @@ pub enum SymbolValue {
     StringLit(Vec<u8>),
     TableLit(Rc<RefCell<SymbolTable>>),
     FunctionDecl {
-        args: Rc<RefCell<Vec<(String, SymbolValue)>>>,
+        args: Rc<RefCell<SymbolTable>>,
         scope: Rc<RefCell<SymbolTable>>,
     },
     Symbol(Rc<RefCell<SymbolTableEntry>>),
@@ -100,12 +100,12 @@ impl Debug for SymbolValue {
                 d.finish()
             }
             Self::FunctionDecl { args, scope } => {
-                struct FunctionArguments<'a>(&'a [(String, SymbolValue)]);
+                struct FunctionArguments<'a>(&'a SymbolTable);
                 impl<'a> Debug for FunctionArguments<'a> {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         let mut d = f.debug_struct("");
-                        for (k, v) in self.0 {
-                            d.field(k, &*v);
+                        for (k, v) in self.0.t.iter() {
+                            d.field(k, &v.borrow().value);
                         }
                         d.finish()
                     }
@@ -355,20 +355,29 @@ impl SymbolTableVisitor {
             }
             Expression::VarArgs(_) => SymbolValue::VarArgs,
             Expression::FunctionDef(def) => {
-                let args = Rc::new(RefCell::new(Vec::new()));
+                let args = Rc::new(RefCell::new(SymbolTable::default()));
                 let scope = Rc::new(RefCell::new(SymbolTable::default()));
-                scope.borrow_mut().parent = Some(current_scope.clone());
+                args.borrow_mut().parent = Some(current_scope.clone());
+                scope.borrow_mut().parent = Some(args.clone());
                 scopes.push(scope.clone());
                 for v in &def.par_list.parts {
                     match v {
                         ParListPart::Comma(_) => continue,
                         ParListPart::Name(v) => {
                             args.borrow_mut()
-                                .push((v.name.to_string(), SymbolValue::None));
+                                .insert(v.name.to_string(), SymbolTableEntry{
+                                    parent: current_scope.clone(),
+                                    symbol: v.name.to_string(),
+                                    value: SymbolValue::None,
+                                });
                         }
                         ParListPart::VarArgs(_v) => {
                             args.borrow_mut()
-                                .push(("...".to_string(), SymbolValue::VarArgs));
+                                .insert("...".to_string(), SymbolTableEntry {
+                                    parent: current_scope.clone(),
+                                    symbol: "...".to_string(),
+                                    value: SymbolValue::VarArgs,
+                                });
                         }
                     }
                 }
