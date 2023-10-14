@@ -87,6 +87,15 @@ impl<'ctx> ExpectedHelpers<'ctx> {
 }
 
 impl<'ctx> CodeGenerator<'ctx> {
+    pub fn from_tvalue_module(tvalue_module: &Module<'ctx>, name: &str) -> Self {
+        let context = tvalue_module.get_context();
+        let module = context.create_module(name);
+        for f in tvalue_module.get_functions() {
+            module.add_function(f.get_name().to_str().unwrap(), f.get_type(), Some(f.get_linkage()));
+        }
+        Self::new(module)
+    }
+
     pub fn new(module: Module<'ctx>) -> Self {
         let context = module.get_context();
         let builder = context.create_builder();
@@ -264,5 +273,20 @@ impl<'ctx> CodeGenerator<'ctx> {
     pub fn perform_print(&self, value: PointerValue<'ctx>) {
         self.builder
             .build_call(self.helpers.print, &[value.into()], "_");
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::tvalue::TValueModuleBuilder;
+
+    use super::*;
+
+    #[test]
+    fn try_construct() {
+        let context = inkwell::context::Context::create();
+        let mut tvalue_builder = TValueModuleBuilder::new(&context);
+        let tvalue_module = tvalue_builder.gen_lib();
+        let _generator = CodeGenerator::from_tvalue_module(&tvalue_module, "test");
     }
 }

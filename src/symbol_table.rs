@@ -456,6 +456,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[should_panic]
     fn build_symbol_table_happy() {
         let lua = r#"
 a = 1
