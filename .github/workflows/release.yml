@@ -99,7 +99,7 @@ jobs:
           submodules: recursive
       - name: Install LLVM and Clang
         if: runner.os == 'Linux'
-        uses: FreeMasen/install-llvm-action@v4
+        uses: KyleMayes/install-llvm-action@v1.9.0
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
@@ -108,7 +108,7 @@ jobs:
           directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang
         if: runner.os == 'Windows'
-        uses: KyleMayes/install-llvm-action@v1.8.3
+        uses: KyleMayes/install-llvm-action@v1.9.0
         with:
           directory: C:\LLVM
           version: 16
@@ -119,7 +119,7 @@ jobs:
           C:\LLVM\bin\llvm-config.exe --prefix
       - name: Install LLVM and Clang
         if: runner.os == 'Macos'
-        uses: KyleMayes/install-llvm-action@v1.8.3
+        uses: KyleMayes/install-llvm-action@v1.9.0
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
