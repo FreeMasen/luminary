@@ -183,9 +183,10 @@ impl SymbolTableVisitor {
     pub fn visit_stmt(&mut self, stmt: &Statement) {
         Self::visit_stmt_continued(
             self.global.clone(),
-            self.module.clone(), 
+            self.module.clone(),
             &mut self.scopes,
-            stmt)
+            stmt,
+        )
     }
     fn visit_stmt_continued(
         global: Rc<RefCell<SymbolTable>>,
@@ -223,10 +224,7 @@ impl SymbolTableVisitor {
             }
             Statement::Break(_) => todo!(),
             Statement::GoTo { .. } => todo!(),
-            Statement::Do {
-                block,
-                ..
-            } => {
+            Statement::Do { block, .. } => {
                 let mut do_scope = SymbolTable::default();
                 do_scope.parent = Some(current.clone());
                 let do_scope = Rc::new(RefCell::new(do_scope));
@@ -235,18 +233,12 @@ impl SymbolTableVisitor {
                 }
                 scopes.push(do_scope);
             }
-            Statement::While {
-                ..
-            } => todo!(),
-            Statement::Repeat {
-                ..
-            } => todo!(),
+            Statement::While { .. } => todo!(),
+            Statement::Repeat { .. } => todo!(),
             Statement::If(_) => todo!(),
             Statement::For(_) => todo!(),
             Statement::ForIn(_) => todo!(),
-            Statement::Function {
-                ..
-            } => todo!(),
+            Statement::Function { .. } => todo!(),
             Statement::Return(_) => todo!(),
         }
     }
@@ -267,9 +259,8 @@ impl SymbolTableVisitor {
             Expression::VarArgs(_) => todo!(),
             Expression::FunctionDef(_) => todo!(),
             Expression::TableCtor(_) => todo!(),
-            Expression::Parened {..
-            } => todo!(),
-            Expression::BinOp { ..} => todo!(),
+            Expression::Parened { .. } => todo!(),
+            Expression::BinOp { .. } => todo!(),
             Expression::UnaryOp { .. } => todo!(),
             Expression::FuncCall(_) => todo!(),
             Expression::Suffixed(_) => todo!(),
@@ -300,7 +291,8 @@ impl SymbolTableVisitor {
                 .next()
                 .unwrap_or_else(|| NIL_EXPR);
 
-            let value = Self::visit_assignment_source(global.clone(), current.clone(),scopes, value);
+            let value =
+                Self::visit_assignment_source(global.clone(), current.clone(), scopes, value);
             match target {
                 Expression::Name(name) => {
                     if local_span.is_some() {
@@ -364,20 +356,24 @@ impl SymbolTableVisitor {
                     match v {
                         ParListPart::Comma(_) => continue,
                         ParListPart::Name(v) => {
-                            args.borrow_mut()
-                                .insert(v.name.to_string(), SymbolTableEntry{
+                            args.borrow_mut().insert(
+                                v.name.to_string(),
+                                SymbolTableEntry {
                                     parent: current_scope.clone(),
                                     symbol: v.name.to_string(),
                                     value: SymbolValue::None,
-                                });
+                                },
+                            );
                         }
                         ParListPart::VarArgs(_v) => {
-                            args.borrow_mut()
-                                .insert("...".to_string(), SymbolTableEntry {
+                            args.borrow_mut().insert(
+                                "...".to_string(),
+                                SymbolTableEntry {
                                     parent: current_scope.clone(),
                                     symbol: "...".to_string(),
                                     value: SymbolValue::VarArgs,
-                                });
+                                },
+                            );
                         }
                     }
                 }

@@ -91,7 +91,11 @@ impl<'ctx> CodeGenerator<'ctx> {
         let context = tvalue_module.get_context();
         let module = context.create_module(name);
         for f in tvalue_module.get_functions() {
-            module.add_function(f.get_name().to_str().unwrap(), f.get_type(), Some(f.get_linkage()));
+            module.add_function(
+                f.get_name().to_str().unwrap(),
+                f.get_type(),
+                Some(f.get_linkage()),
+            );
         }
         Self::new(module)
     }
