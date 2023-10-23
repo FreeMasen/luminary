@@ -20,6 +20,8 @@ use inkwell::{
     },
 };
 
+mod float_to_string;
+
 pub enum TValue {
     Nil,
     Bool(bool),
