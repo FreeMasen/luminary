@@ -21,6 +21,7 @@ use inkwell::{
 };
 
 mod float_to_string;
+pub use float_to_string::add_float_to_string;
 
 pub enum TValue {
     Nil,

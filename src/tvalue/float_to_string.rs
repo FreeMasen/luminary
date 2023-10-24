@@ -11,6 +11,8 @@ use inkwell::{
 pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
+    let append_char = emit_append_char(module);
+    let append = emit_append(module);
     let precision = module.add_global(c.f32_type(), Default::default(), "PRECISION");
     precision.set_initializer(&c.f32_type().const_float(0.0001));
     precision.set_constant(true);
@@ -76,7 +78,6 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.build_return(Some(&c.i32_type().const_int(1, false)));
 
     b.position_at_end(isnz);
-    let digit_ptr = b.build_alloca(c.i32_type(), "digit_ptr");
     let m_ptr = b.build_alloca(c.i32_type(), "m_ptr");
     let m1_ptr = b.build_alloca(c.i32_type(), "m1_ptr");
 
@@ -166,19 +167,19 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.build_store(m_ptr, c.i32_type().const_zero());
     b.build_unconditional_branch(dont_use_exp);
     let loop_top = c.append_basic_block(f, "loop_top");
-    let m_le1_bb = c.append_basic_block(f, "m_le1_bb");
+    let m_lt1_bb = c.append_basic_block(f, "m_lt1_bb");
 
     b.position_at_end(dont_use_exp);
     let m = b.build_load(c.i32_type(), m_ptr, "m").into_int_value();
-    let m_le1 = b.build_int_compare(
-        IntPredicate::SLE,
+    let m_lt1 = b.build_int_compare(
+        IntPredicate::SLT,
         m,
         c.i32_type().const_int(1, false),
         "m_le1",
     );
-    b.build_conditional_branch(m_le1, m_le1_bb, loop_top);
+    b.build_conditional_branch(m_lt1, m_lt1_bb, loop_top);
 
-    b.position_at_end(m_le1_bb);
+    b.position_at_end(m_lt1_bb);
     b.build_store(m_ptr, c.i32_type().const_zero());
     b.build_unconditional_branch(loop_top);
 
@@ -212,7 +213,11 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.build_conditional_branch(should_use_exp, add_exp, exit);
 
     b.position_at_end(add_exp);
-    emit_append_char('e', &c, &b, dest, ret_ptr);
+    b.build_call(append_char, &[
+        dest.into(),
+        ret_ptr.into(),
+        c.i8_type().const_int(b'e' as _, false).into()
+    ], "_");
     let m1 = b.build_load(c.i32_type(), m1_ptr, "m1").into_int_value();
     let m1_gtz = b.build_int_compare(IntPredicate::SGT, m1, c.i32_type().const_zero(), "m1gtz");
     let m1gtzbb = c.append_basic_block(f, "m1gtzbb");
@@ -221,11 +226,19 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.build_conditional_branch(m1_gtz, m1gtzbb, m1ltzbb);
 
     b.position_at_end(m1gtzbb);
-    emit_append_char('+', &c, &b, dest, ret_ptr);
+    b.build_call(append_char, &[
+        dest.into(),
+        ret_ptr.into(),
+        c.i8_type().const_int(b'+' as u64, false).into()
+    ], "_");
     b.build_unconditional_branch(exp_cont);
-
+    
     b.position_at_end(m1ltzbb);
-    emit_append_char('-', &c, &b, dest, ret_ptr);
+    b.build_call(append, &[
+        dest.into(),
+        ret_ptr.into(),
+        c.i8_type().const_int(b'-' as u64, false).into()
+    ], "_");
     let m1 = b.build_load(c.i32_type(), m_ptr, "m1").into_int_value();
     let new_m1 = b.build_int_neg(m1, "new_m1");
     b.build_store(m1_ptr, new_m1);
@@ -245,7 +258,13 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
 
     b.position_at_end(loop_body);
     let ch_pre = b.build_int_signed_rem(m1, c.i32_type().const_int(10, false), "ch_pre");
-    emit_append_int(ch_pre, &c, &b, dest, ret_ptr);
+    let ch_pre2 = b.build_int_truncate_or_bit_cast(ch_pre, c.i8_type(), "ch_pre2");
+    let append = module.get_function("append").unwrap();
+    b.build_call(append, &[
+        dest.into(),
+        ret_ptr.into(),
+        ch_pre2.into()
+    ], "_");
     let new_m1 = b.build_int_signed_div(m1, c.i32_type().const_int(10, false), "new_m1");
     b.build_store(m1_ptr, new_m1);
     let m = b.build_load(c.i32_type(), m_ptr, "m").into_int_value();
@@ -330,55 +349,60 @@ fn emit_swap_step<'ctx>(
     b.build_store(lhs_ptr, res);
 }
 
-fn emit_append_int<'ctx>(
-    i: IntValue,
-    c: &ContextRef<'ctx>,
-    b: &Builder<'ctx>,
-    buf: PointerValue<'ctx>,
-    len_ptr: PointerValue<'ctx>,
-) -> IntValue<'ctx> {
-    let current = b
-        .build_load(c.i32_type(), len_ptr, "len")
-        .as_any_value_enum()
-        .into_int_value();
-    let ch_ptr = unsafe {
-        b.build_in_bounds_gep(
-            c.i8_type().array_type(0),
-            buf,
-            &[c.i32_type().const_int(0, false).into(), current.into()],
-            "char_ptr",
-        )
-    };
-    let ch = b.build_int_add(i, c.i32_type().const_int('0' as _, false), "ch");
-    b.build_store(ch_ptr, ch);
-    let next_char = b.build_int_add(current, c.i32_type().const_int(1, false), "next_char");
-    b.build_store(len_ptr, next_char);
-    current
+fn emit_append<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
+    let c = module.get_context();
+    let b = c.create_builder();
+    let append_char = module.get_function("append_char").unwrap();
+    let f = module.add_function("append", c.void_type().fn_type(&[
+        c.i8_type().array_type(0).ptr_type(Default::default()).into(),
+        c.i32_type().array_type(0).ptr_type(Default::default()).into(),
+        c.i8_type().into(),
+    ], false), None);
+    let buf_ptr = f.get_first_param().unwrap().into_pointer_value();
+    buf_ptr.set_name("buf_ptr");
+    let len_ptr = f.get_nth_param(1).unwrap().into_pointer_value();
+    len_ptr.set_name("len_ptr");
+    let value = f.get_last_param().unwrap().into_int_value();
+    value.set_name("value");
+    b.position_at_end(c.append_basic_block(f, "entry"));
+    
+    let ch = b.build_int_add(c.i8_type().const_int(b'0' as _, false), value , "ch");
+    b.build_call(append_char, &[
+        buf_ptr.into(),
+        len_ptr.into(),
+        ch.into(),
+    ], "_");
+    b.build_return(None);
+    f
 }
 
-fn emit_append_char<'ctx>(
-    ch: char,
-    c: &ContextRef<'ctx>,
-    b: &Builder<'ctx>,
-    buf: PointerValue<'ctx>,
-    len_ptr: PointerValue<'ctx>,
-) -> IntValue<'ctx> {
-    let current = b
-        .build_load(c.i32_type(), len_ptr, "len")
-        .as_any_value_enum()
-        .into_int_value();
+fn emit_append_char<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
+    let c = module.get_context();
+    let b = c.create_builder();
+    let f = module.add_function("append_char", c.void_type().fn_type(&[
+        c.i8_type().array_type(0).ptr_type(Default::default()).into(),
+        c.i32_type().array_type(0).ptr_type(Default::default()).into(),
+        c.i8_type().into(),
+    ], false), None);
+    let buf_ptr = f.get_first_param().unwrap().into_pointer_value();
+    buf_ptr.set_name("buf_ptr");
+    let len_ptr = f.get_nth_param(1).unwrap().into_pointer_value();
+    len_ptr.set_name("len_ptr");
+    let value = f.get_last_param().unwrap().into_int_value();
+    value.set_name("value");
+    b.position_at_end(c.append_basic_block(f, "entry"));
+    let len = b.build_load(c.i32_type(), len_ptr, "len").as_any_value_enum().into_int_value();
+    let next_len = b.build_int_add(len, c.i32_type().const_int(1, false), "next_len");
     let ch_ptr = unsafe {
-        b.build_in_bounds_gep(
-            c.i8_type().array_type(0),
-            buf,
-            &[c.i32_type().const_int(0, false).into(), current.into()],
-            "char_ptr",
-        )
+        b.build_gep(c.i8_type().array_type(0), buf_ptr, &[
+            c.i32_type().const_zero().into(),
+            len.into(),
+        ], "ch_ptr")
     };
-    b.build_store(ch_ptr, c.i8_type().const_int(ch as _, false));
-    let next_char = b.build_int_add(current, c.i32_type().const_int(1, false), "next_char");
-    b.build_store(len_ptr, next_char);
-    current
+    b.build_store(ch_ptr, value);
+    b.build_store(len_ptr, next_len);
+    b.build_return(None);
+    f
 }
 
 fn emit_check_for_neg<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
@@ -429,21 +453,13 @@ fn emit_check_for_neg<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.position_at_end(is_neg);
     let inverted = b.build_float_neg(n, "inverted");
     b.build_store(n_ptr, inverted);
-    let idx = b
-        .build_load(c.i32_type(), len_ptr, "idx")
-        .as_any_value_enum()
-        .into_int_value();
-    let ch_ptr = unsafe {
-        b.build_gep(
-            c.i8_type().array_type(0),
-            buf,
-            &[c.i32_type().const_zero(), idx],
-            "ch_ptr",
-        )
-    };
-    b.build_store(ch_ptr, c.i8_type().const_int(b'-' as _, false));
-    let new_idx = b.build_int_add(idx, c.i32_type().const_int(1, false), "new_idx");
-    b.build_store(len_ptr, new_idx);
+    
+    let append_char = module.get_function("append_char").unwrap();
+    b.build_call(append_char, &[
+        buf.into(), len_ptr.into(), 
+        c.i8_type().const_int(b'-' as _, false).into()
+    ], "_");
+    
     b.build_return(Some(&neg));
 
     f
@@ -618,8 +634,14 @@ fn emit_loop_step<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
         .as_any_value_enum()
         .into_float_value();
     let n_update = b.build_float_mul(digit_pre2, weight, "n_update");
-    let digit = b.build_float_to_unsigned_int(digit_pre2, c.i32_type(), "digit");
-    emit_append_int(digit, &c, &b, buf, len_ptr);
+    let digit = b.build_float_to_unsigned_int(digit_pre2, c.i8_type(), "digit");
+    let append_char = module.get_function("append_char").unwrap();// emit_append_char(module);
+    let append = module.get_function("append").unwrap(); //emit_append(module);
+    b.build_call(append, &[
+        buf.into(),
+        len_ptr.into(),
+        digit.into()
+    ], "_");
     let new_n = b.build_float_sub(n, n_update, "new_n");
     b.build_store(n_ptr, new_n);
     b.build_unconditional_branch(after_digit);
@@ -642,7 +664,12 @@ fn emit_loop_step<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.build_conditional_branch(n_gt_z, handle_dot, after_dot);
 
     b.position_at_end(handle_dot);
-    emit_append_char('.', &c, &b, buf, len_ptr);
+    b.build_call(append_char, &[
+        buf.into(),
+        len_ptr.into(),
+        c.i8_type().const_int(b'.' as u64, false).into()
+    ], "_");
+    
     b.build_unconditional_branch(after_dot);
 
     b.position_at_end(after_dot);
@@ -677,27 +704,6 @@ mod tests {
         let c = Context::create();
         let m = c.create_module("snapshot::float_to_string");
         super::add_float_to_string(&m);
-        let printf = m.add_function(
-            "printf",
-            c.i32_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], true),
-            None,
-        );
-        let b = c.create_builder();
-        for f in m.get_functions() {
-            let base = f.get_name().to_str().unwrap();
-            for bb in f.get_basic_blocks() {
-                b.position_before(&bb.get_first_instruction().unwrap());
-                let name = bb.get_name().to_str().unwrap();
-                let mut printed = format!("{base}->{name}");
-                let size = printed.len() + 2;
-                printed.push('\n');
-                printed.push('\0');
-                let fmt = b.build_alloca(c.i8_type().array_type(size as _), "fmt");
-                b.build_store(fmt, c.const_string(printed.as_bytes(), false));
-                b.build_call(printf, &[fmt.into()], "_");
-            }
-        }
         std::fs::write("test-ir/float_to_string.ll", m.to_string()).unwrap();
         m.verify().unwrap_or_else(|e| {
             for line in e.to_string().lines() {
@@ -709,13 +715,14 @@ mod tests {
         type F = unsafe extern "C" fn(f32, *mut u8) -> u32;
         let f = unsafe { jit.get_function::<F>("float_to_string").unwrap() };
         let mut v = -15.0f32;
-        for _i in 0..100 {
+        while v < 16.0 {
             let mut buf = [0u8; 4096];
             let ptr = buf.as_mut_ptr();
             let len = unsafe { f.call(v, ptr) };
-            println!("{len}: {:?}", &buf[0..(len as usize)+2]);
+            let ret = String::from_utf8_lossy(&buf[0..len as usize]);
+            println!("{len}: {ret:?}");
             assert_eq!(
-                String::from_utf8_lossy(&buf[0..len as usize]),
+                ret,
                 format!("{v}"),
             );
             v += 0.5;
