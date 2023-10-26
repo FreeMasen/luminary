@@ -141,7 +141,7 @@ jobs:
         if: runner.os == 'Windows'
         run:  |
           ls C:\LLVM\bin
-          $var = "LLVM_SYS_160_PREFIX=C:\LLVM"
+          $var = "LLVM_SYS_160_PREFIX='C:\LLVM'"
           echo "$var" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         shell: pwsh
       - uses: swatinem/rust-cache@v2
