@@ -78,18 +78,22 @@ pub fn emit_code<'ctx>(gen: &CodeGenerator<'ctx>, lua: String) {
                 }
                 match call.args {
                     analisar::ast::Args::ExpList(exprs) => {
-                        let ptr = expression_to_ptr(
-                            &gen,
-                            exprs.first().unwrap_or(&Expression::Nil),
-                            "_",
-                            &mut variables,
-                        );
-                        gen.perform_print(ptr);
+                        if exprs.is_empty() {
+                            let ptr = expression_to_ptr(
+                                &gen,
+                                &Expression::Nil,
+                                "_",
+                                &mut variables,
+                            );
+                            gen.perform_print(std::iter::once(ptr));
+                            continue;
+                        }
+                        gen.perform_print(exprs.iter().map(|e| expression_to_ptr(&gen, e, "_", &mut variables)));
                     }
                     analisar::ast::Args::Table(_) => panic!("tables unsupported"),
                     analisar::ast::Args::String(lit) => {
                         let ptr = gen.init_tvalue_string(&lit.0, "_");
-                        gen.perform_print(ptr);
+                        gen.perform_print(std::iter::once(ptr));
                     }
                 };
             }
