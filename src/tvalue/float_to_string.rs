@@ -1,24 +1,31 @@
 use inkwell::{
-    builder::Builder,
-    context::ContextRef,
     intrinsics::Intrinsic,
     module::Module,
     types::BasicType,
-    values::{AnyValue, FunctionValue, IntValue, PointerValue},
+    values::{AnyValue, FunctionValue},
     FloatPredicate, IntPredicate,
 };
+
+pub mod names {
+    pub const FLOAT_TO_STRING: &str = "std::float_to_string::float_to_string";
+    pub(super) const APPEND: &str = "std::float_to_string::append";
+    pub(super) const APPEND_CHAR: &str = "std::float_to_string::append_char";
+    pub(super) const CALCULATE_MAGNITUDE: &str = "std::float_to_string::calculate_magnitude";
+    pub(super) const CHECK_FOR_NEG: &str = "std::float_to_string::check_for_neg";
+    pub(super) const LOOP_SHOULD_CONTINUE: &str = "std::float_to_string::loop_should_continue";
+    pub(super) const PRECISION_LOOP_STEP: &str = "std::float_to_string::precision_loop_step";
+}
 
 pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
-    let append_char = emit_append_char(module);
-    let append = emit_append(module);
+    let _append_char = emit_append_char(module);
+    let _append = emit_append(module);
     let precision = module.add_global(c.f32_type(), Default::default(), "PRECISION");
     precision.set_initializer(&c.f32_type().const_float(0.0001));
     precision.set_constant(true);
-    let precision_ptr = precision.as_any_value_enum().into_pointer_value();
     let f = module.add_function(
-        "float_to_string",
+        names::FLOAT_TO_STRING,
         c.i32_type().fn_type(
             &[
                 c.f32_type().into(),
@@ -79,7 +86,6 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
 
     b.position_at_end(isnz);
     let m_ptr = b.build_alloca(c.i32_type(), "m_ptr");
-    let m1_ptr = b.build_alloca(c.i32_type(), "m1_ptr");
 
     let n_ptr = b.build_alloca(c.f32_type(), "n_ptr");
     b.build_store(n_ptr, value);
@@ -87,7 +93,7 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     b.build_store(ret_ptr, c.i32_type().const_zero());
     let check_for_neg = emit_check_for_neg(module);
 
-    let neg = b
+    let _neg = b
         .build_call(
             check_for_neg,
             &[dest.into(), n_ptr.into(), ret_ptr.into()],
@@ -96,15 +102,7 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
         .as_any_value_enum()
         .into_int_value();
 
-    let log10_intrinsic = Intrinsic::find("llvm.log10.f32").expect("llvm.pow.f32");
-    let log10_f = log10_intrinsic
-        .get_declaration(module, &[c.f32_type().as_basic_type_enum()])
-        .unwrap();
     let n = b.build_load(c.f32_type(), n_ptr, "n").into_float_value();
-    let mf = b
-        .build_call(log10_f, &[n.into()], "mf")
-        .as_any_value_enum()
-        .into_float_value();
     let calculate_magnitude = emit_calculate_magnitude(module);
     let m = b
         .build_call(calculate_magnitude, &[n.into()], "m")
@@ -147,9 +145,9 @@ pub fn add_float_to_string<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
 fn emit_append<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
-    let append_char = module.get_function("append_char").unwrap();
+    let append_char = module.get_function(names::APPEND_CHAR).unwrap();
     let f = module.add_function(
-        "append",
+        names::APPEND,
         c.void_type().fn_type(
             &[
                 c.i8_type()
@@ -188,7 +186,7 @@ fn emit_append_char<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
     let f = module.add_function(
-        "append_char",
+        names::APPEND_CHAR,
         c.void_type().fn_type(
             &[
                 c.i8_type()
@@ -235,7 +233,7 @@ fn emit_check_for_neg<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
     let f = module.add_function(
-        "check_for_neg",
+        names::CHECK_FOR_NEG,
         c.bool_type().fn_type(
             &[
                 c.i8_type()
@@ -280,7 +278,7 @@ fn emit_check_for_neg<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let inverted = b.build_float_neg(n, "inverted");
     b.build_store(n_ptr, inverted);
 
-    let append_char = module.get_function("append_char").unwrap();
+    let append_char = module.get_function(names::APPEND_CHAR).unwrap();
     b.build_call(
         append_char,
         &[
@@ -300,7 +298,7 @@ fn emit_calculate_magnitude<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> 
     let c = module.get_context();
     let b = c.create_builder();
     let f = module.add_function(
-        "calculate_magnitude",
+        names::CALCULATE_MAGNITUDE,
         c.i32_type().fn_type(&[c.f32_type().into()], false),
         None,
     );
@@ -341,7 +339,7 @@ fn emit_loop_should_continue<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx>
     let c = module.get_context();
     let b = c.create_builder();
     let f = module.add_function(
-        "loop_should_continue",
+        names::LOOP_SHOULD_CONTINUE,
         c.bool_type().fn_type(
             &[
                 c.f32_type().ptr_type(Default::default()).into(),
@@ -395,7 +393,7 @@ fn emit_loop_step<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
     let f = module.add_function(
-        "precision_loop_step",
+        names::PRECISION_LOOP_STEP,
         c.void_type().fn_type(
             &[
                 c.i8_type()
@@ -463,8 +461,8 @@ fn emit_loop_step<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
         .into_float_value();
     let n_update = b.build_float_mul(digit_pre2, weight, "n_update");
     let digit = b.build_float_to_unsigned_int(digit_pre2, c.i8_type(), "digit");
-    let append_char = module.get_function("append_char").unwrap(); // emit_append_char(module);
-    let append = module.get_function("append").unwrap(); //emit_append(module);
+    let append_char = module.get_function(names::APPEND_CHAR).unwrap(); // emit_append_char(module);
+    let append = module.get_function(names::APPEND).unwrap(); //emit_append(module);
     b.build_call(append, &[buf.into(), len_ptr.into(), digit.into()], "_");
     let new_n = b.build_float_sub(n, n_update, "new_n");
     b.build_store(n_ptr, new_n);
@@ -537,7 +535,7 @@ mod tests {
             .create_jit_execution_engine(inkwell::OptimizationLevel::Aggressive)
             .unwrap();
         type F = unsafe extern "C" fn(f32, *mut u8) -> u32;
-        let f = unsafe { jit.get_function::<F>("float_to_string").unwrap() };
+        let f = unsafe { jit.get_function::<F>(super::names::FLOAT_TO_STRING).unwrap() };
         // TODO: unreasonable floats should also work...
         proptest::proptest!(
         |(v in (-9999999999999.0f32..9999999999999.0f32))| {

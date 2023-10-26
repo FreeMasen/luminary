@@ -9,7 +9,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     debug_info::{
-        AsDIScope, DIBasicType, DICompileUnit, DIFile, DIScope, DIType, DebugInfoBuilder,
+        DIBasicType, DIType, DebugInfoBuilder,
     },
     intrinsics::Intrinsic,
     module::Module,
