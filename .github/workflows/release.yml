@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install LLVM and Clang
+      - name: Install LLVM and Clang (Linux)
         if: runner.os == 'Linux'
         uses: KyleMayes/install-llvm-action@v1.9.0
         with:
@@ -106,7 +106,7 @@ jobs:
           ubuntu-version: 20.04
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
-      - name: Install LLVM and Clang
+      - name: Install LLVM and Clang (Windows)
         if: runner.os == 'Windows'
         uses: KyleMayes/install-llvm-action@v1.9.0
         with:
@@ -114,7 +114,7 @@ jobs:
           force-version: true
           directory: C:\LLVM
           version: 16.0.6
-      - name: Install LLVM and Clang
+      - name: Install LLVM and Clang (MacOS)
         if: runner.os == 'Macos'
         uses: KyleMayes/install-llvm-action@v1.9.0
         with:
@@ -122,19 +122,19 @@ jobs:
           force-version: true
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
-      - name: update llvm-sys env var
+      - name: update llvm-sys env var (MacOS)
         if: runner.os == 'Macos'
         run: echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
-      - name: update llvm-sys env var
+      - name: update llvm-sys env var (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install build-essential
           echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
-      - name: update llvm-sys env var
+      - name: update llvm-sys env var (Windows)
         if: runner.os == 'Windows'
         run:  |
-          ls C:\LLVM\bin
-          echo "C:\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $var = C:\LLVM\bin\llvm-config --prefix
+          echo "LLVM_SYS_160_PREFIX=$var" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         shell: pwsh
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
