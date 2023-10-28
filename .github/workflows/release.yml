@@ -136,6 +136,8 @@ jobs:
           $var = C:\LLVM\bin\llvm-config --prefix
           echo "LLVM_SYS_160_PREFIX=$var" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         shell: pwsh
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
       - uses: swatinem/rust-cache@v2
       - name: Install cargo-dist
         run: ${{ matrix.install_dist }}
