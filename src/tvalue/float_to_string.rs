@@ -535,7 +535,10 @@ mod tests {
             .create_jit_execution_engine(inkwell::OptimizationLevel::Aggressive)
             .unwrap();
         type F = unsafe extern "C" fn(f32, *mut u8) -> u32;
-        let f = unsafe { jit.get_function::<F>(super::names::FLOAT_TO_STRING).unwrap() };
+        let f = unsafe {
+            jit.get_function::<F>(super::names::FLOAT_TO_STRING)
+                .unwrap()
+        };
         // TODO: unreasonable floats should also work...
         proptest::proptest!(
         |(v in (-9999999999999.0f32..9999999999999.0f32))| {

@@ -1,10 +1,9 @@
-use analisar::aware::ast::{
-    Args, Block, ExpListItem, Expression, Field, FuncBody, FunctionCall, ParListPart, Statement,
-    Table,
-};
+//TODO: this module isn't done so things are still unused
+#![allow(dead_code, unused)]
+use analisar::aware::ast::{ExpListItem, Expression, Field, ParListPart, Statement};
 use indexmap::IndexMap;
 use lex_lua::Span;
-use std::{arch::global_asm, cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 static NIL_EXPR: &Expression<'static> = &Expression::Nil(Span { start: 0, end: 0 });
 
@@ -50,6 +49,7 @@ pub struct SymbolTableEntry {
     symbol: String,
     parent: Rc<RefCell<SymbolTable>>,
     value: SymbolValue,
+    details: SymbolDetails,
 }
 
 impl Debug for SymbolTableEntry {
@@ -138,13 +138,24 @@ impl Debug for SymbolValue {
 }
 
 impl SymbolTableEntry {
-    pub fn new(symbol: String, parent: Rc<RefCell<SymbolTable>>, value: SymbolValue) -> Self {
+    pub fn new(
+        symbol: String,
+        parent: Rc<RefCell<SymbolTable>>,
+        value: SymbolValue,
+        details: SymbolDetails,
+    ) -> Self {
         Self {
             symbol,
             parent,
             value,
+            details,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct SymbolDetails {
+    start_byte_offset: usize,
 }
 
 #[derive(Clone)]
@@ -212,13 +223,18 @@ impl SymbolTableVisitor {
                 targets,
                 values,
             ),
-            Statement::Label { name, .. } => {
+            Statement::Label {
+                colons1_span, name, ..
+            } => {
                 current.borrow_mut().insert(
                     name.name.to_string(),
                     SymbolTableEntry {
                         parent: current.clone(),
                         symbol: name.name.to_string(),
                         value: SymbolValue::Label(name.name.to_string()),
+                        details: SymbolDetails {
+                            start_byte_offset: colons1_span.start,
+                        },
                     },
                 );
             }
@@ -244,9 +260,9 @@ impl SymbolTableVisitor {
     }
 
     fn visit_expr_stmt_continued(
-        global: Rc<RefCell<SymbolTable>>,
-        current: Rc<RefCell<SymbolTable>>,
-        scopes: &mut Vec<Rc<RefCell<SymbolTable>>>,
+        _global: Rc<RefCell<SymbolTable>>,
+        _current: Rc<RefCell<SymbolTable>>,
+        _scopes: &mut Vec<Rc<RefCell<SymbolTable>>>,
         expr: &Expression,
     ) {
         match expr {
@@ -302,6 +318,9 @@ impl SymbolTableVisitor {
                                 symbol: name.name.to_string(),
                                 parent: current.clone(),
                                 value,
+                                details: SymbolDetails {
+                                    start_byte_offset: name.start(),
+                                },
                             })),
                         );
                     } else {
@@ -311,11 +330,14 @@ impl SymbolTableVisitor {
                                 symbol: name.name.to_string(),
                                 parent: global.clone(),
                                 value,
+                                details: SymbolDetails {
+                                    start_byte_offset: name.start(),
+                                },
                             })),
                         );
                     }
                 }
-                Expression::Suffixed(expr) => {
+                Expression::Suffixed(_expr) => {
                     todo!("Assigning to suffixed");
                 }
                 _ => panic!("assigning to non-name or suffixed expression"),
@@ -362,16 +384,22 @@ impl SymbolTableVisitor {
                                     parent: current_scope.clone(),
                                     symbol: v.name.to_string(),
                                     value: SymbolValue::None,
+                                    details: SymbolDetails {
+                                        start_byte_offset: v.start(),
+                                    },
                                 },
                             );
                         }
-                        ParListPart::VarArgs(_v) => {
+                        ParListPart::VarArgs(v) => {
                             args.borrow_mut().insert(
                                 "...".to_string(),
                                 SymbolTableEntry {
                                     parent: current_scope.clone(),
                                     symbol: "...".to_string(),
                                     value: SymbolValue::VarArgs,
+                                    details: SymbolDetails {
+                                        start_byte_offset: v.start,
+                                    },
                                 },
                             );
                         }
@@ -406,21 +434,27 @@ impl SymbolTableVisitor {
                                 parent: t.clone(),
                                 symbol: name.name.to_string(),
                                 value: v,
+                                details: SymbolDetails {
+                                    start_byte_offset: name.start(),
+                                },
                             };
                             t.borrow_mut().insert(name.name.to_string(), entry);
                         }
-                        Field::List { value, sep: _ } => {
+                        Field::List { value: exp, sep: _ } => {
                             let value = Self::visit_assignment_source(
                                 current_scope.clone(),
                                 t.clone(),
                                 scopes,
-                                value,
+                                exp,
                             );
                             let symbol = format!("::{}::", idx);
                             let entry = SymbolTableEntry {
                                 parent: t.clone(),
                                 symbol: symbol.clone(),
                                 value,
+                                details: SymbolDetails {
+                                    start_byte_offset: exp.start(),
+                                },
                             };
                             t.borrow_mut().insert(symbol, entry);
                         }
@@ -431,10 +465,10 @@ impl SymbolTableVisitor {
             Expression::Parened { expr, .. } => {
                 Self::visit_assignment_source(global_scope, current_scope, scopes, &*expr)
             }
-            Expression::BinOp { left, op, right } => {
+            Expression::BinOp { left: _, op: _, right: _ } => {
                 todo!()
             }
-            Expression::UnaryOp { op, exp } => {
+            Expression::UnaryOp { op: _, exp: _ } => {
                 todo!()
             }
             Expression::FuncCall(_) => {

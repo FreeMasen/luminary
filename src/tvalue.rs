@@ -1,16 +1,12 @@
 //! This module is for generating a "standard library" that outlines how all lua values
 //! will be represented in the LLVM IR, operator functions, etc.
 
-use std::collections::HashMap;
 
 use inkwell::{
     attributes::{Attribute, AttributeLoc},
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
-    debug_info::{
-        DIBasicType, DIType, DebugInfoBuilder,
-    },
     intrinsics::Intrinsic,
     module::Module,
     types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType},
@@ -46,29 +42,29 @@ pub struct TValueModuleBuilder<'ctx> {
     // di_types: DebugTypes<'ctx>,
 }
 
-#[allow(dead_code)]
-struct DebugTypes<'ctx> {
-    bool_type: DIBasicType<'ctx>,
-    i8_type: DIBasicType<'ctx>,
-    i32_type: DIBasicType<'ctx>,
-    i64_type: DIBasicType<'ctx>,
-    f32_type: DIBasicType<'ctx>,
-    others: HashMap<String, DIType<'ctx>>,
-}
+// #[allow(dead_code)]
+// struct DebugTypes<'ctx> {
+//     bool_type: DIBasicType<'ctx>,
+//     i8_type: DIBasicType<'ctx>,
+//     i32_type: DIBasicType<'ctx>,
+//     i64_type: DIBasicType<'ctx>,
+//     f32_type: DIBasicType<'ctx>,
+//     others: HashMap<String, DIType<'ctx>>,
+// }
 
-impl<'ctx> DebugTypes<'ctx> {
-    fn new(builder: &DebugInfoBuilder<'ctx>) -> Self {
-        let i8_type = builder.create_basic_type("i8", 8, 0, 0).unwrap();
-        Self {
-            i8_type,
-            bool_type: builder.create_basic_type("i1", 1, 0, 0).unwrap(),
-            i32_type: builder.create_basic_type("i32", 32, 0, 0).unwrap(),
-            i64_type: builder.create_basic_type("i64", 64, 0, 0).unwrap(),
-            f32_type: builder.create_basic_type("f32", 32, 0, 0).unwrap(),
-            others: HashMap::new(),
-        }
-    }
-}
+// impl<'ctx> DebugTypes<'ctx> {
+//     fn new(builder: &DebugInfoBuilder<'ctx>) -> Self {
+//         let i8_type = builder.create_basic_type("i8", 8, 0, 0).unwrap();
+//         Self {
+//             i8_type,
+//             bool_type: builder.create_basic_type("i1", 1, 0, 0).unwrap(),
+//             i32_type: builder.create_basic_type("i32", 32, 0, 0).unwrap(),
+//             i64_type: builder.create_basic_type("i64", 64, 0, 0).unwrap(),
+//             f32_type: builder.create_basic_type("f32", 32, 0, 0).unwrap(),
+//             others: HashMap::new(),
+//         }
+//     }
+// }
 
 pub(crate) mod tvalue_names {
     pub const MODULE_NAME: &str = "std::tvalue";
@@ -138,6 +134,7 @@ pub(crate) mod tvalue_names {
     }
 
     pub mod string {
+        #[allow(unused)]
         /// lhs .. rhs
         pub const CONCAT: &str = "std::tvalue::concat";
     }
@@ -222,13 +219,14 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let print_tvalue = self.module.add_function(
             tvalue_names::print_names::PRINT_TVALUE,
             self.context.void_type().fn_type(
-                &[self
-                    .module
-                    .get_struct_type(tvalue_names::types::BASE)
-                    .unwrap()
-                    .ptr_type(Default::default())
-                    .into(), 
-                    self.context.bool_type().into()],
+                &[
+                    self.module
+                        .get_struct_type(tvalue_names::types::BASE)
+                        .unwrap()
+                        .ptr_type(Default::default())
+                        .into(),
+                    self.context.bool_type().into(),
+                ],
                 false,
             ),
             None,
@@ -262,7 +260,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         );
         let not_nil = self.context.append_basic_block(print_tvalue, "notnil");
         self.builder.build_conditional_branch(is_nil, nil, not_nil);
-        
+
         self.builder.position_at_end(not_nil);
         let is_bool = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
@@ -273,7 +271,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let not_bool = self.context.append_basic_block(print_tvalue, "notbool");
         self.builder
             .build_conditional_branch(is_bool, boolean, not_bool);
-        
+
         self.builder.position_at_end(not_bool);
         let is_num = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
@@ -338,7 +336,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let bool_false = self.context.append_basic_block(print_tvalue, "bool_false");
         self.builder
             .build_conditional_branch(truthy, bool_true, bool_false);
-        
+
         self.builder.position_at_end(bool_true);
         let true_fmt = self
             .builder
@@ -382,10 +380,8 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.builder.build_return(None);
 
         self.builder.position_at_end(number);
-        self.builder.build_call(print_number, &[
-            arg.into()
-        ], "_");
-        
+        self.builder.build_call(print_number, &[arg.into()], "_");
+
         self.builder.build_return(None);
 
         self.builder.position_at_end(string);
@@ -432,7 +428,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             "_",
         );
-        
+
         self.builder.build_return(None);
         f
     }
@@ -443,7 +439,10 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             .get_struct_type(tvalue_names::types::NUMBER)
             .unwrap();
         let write = self.module.get_function("write").unwrap();
-        let ftos = self.module.get_function(float_to_string::names::FLOAT_TO_STRING).expect(float_to_string::names::FLOAT_TO_STRING);
+        let ftos = self
+            .module
+            .get_function(float_to_string::names::FLOAT_TO_STRING)
+            .expect(float_to_string::names::FLOAT_TO_STRING);
         let (f, _entry) = self.add_function(
             tvalue_names::print_names::PRINT_TVALUE_NUMBER,
             self.context
@@ -451,26 +450,34 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 .fn_type(&[ty.ptr_type(Default::default()).into()], false),
         );
         let arg = f.get_first_param().unwrap().into_pointer_value();
-        let value_ptr = self.builder.build_struct_gep(ty, arg, 1, "value_ptr").unwrap();
+        let value_ptr = self
+            .builder
+            .build_struct_gep(ty, arg, 1, "value_ptr")
+            .unwrap();
         let value = self
             .builder
             .build_load(self.context.f32_type(), value_ptr, "len")
             .into_float_value();
         let too_large = self.context.append_basic_block(f, "too_large");
         let not_too_large = self.context.append_basic_block(f, "not_too_large");
-        let is_too_large = self.builder.build_float_compare(inkwell::FloatPredicate::OGE, value, self.context.f32_type().const_float(1000000000.0), "is_too_large");
-        self.builder.build_conditional_branch(is_too_large, too_large, not_too_large);
+        let is_too_large = self.builder.build_float_compare(
+            inkwell::FloatPredicate::OGE,
+            value,
+            self.context.f32_type().const_float(1000000000.0),
+            "is_too_large",
+        );
+        self.builder
+            .build_conditional_branch(is_too_large, too_large, not_too_large);
 
         self.builder.position_at_end(not_too_large);
         let bytes_ptr = self
             .builder
             .build_alloca(self.context.i8_type().array_type(255), "bytes_ptr");
-        let len = self.builder.build_call(
-            ftos, &[
-                value.into(), bytes_ptr.into()
-            ],
-            "len"
-        ).as_any_value_enum().into_int_value();
+        let len = self
+            .builder
+            .build_call(ftos, &[value.into(), bytes_ptr.into()], "len")
+            .as_any_value_enum()
+            .into_int_value();
         self.builder.build_call(
             write,
             &[
@@ -481,36 +488,43 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             "_",
         );
         self.builder.build_return(None);
-        
+
         self.builder.position_at_end(too_large);
         let msg = b"<error float too large to print>";
-        let buf = self.builder.build_alloca(self.context.i8_type().array_type(msg.len() as _), "buf");
-        self.builder.build_store(buf, self.context.const_string(msg, false));
+        let buf = self
+            .builder
+            .build_alloca(self.context.i8_type().array_type(msg.len() as _), "buf");
+        self.builder
+            .build_store(buf, self.context.const_string(msg, false));
         self.builder.build_return(None);
 
         f
     }
 
     fn add_tvalue_print_unknown(&self) -> FunctionValue<'ctx> {
-        
         let (f, _) = self.add_function(
             tvalue_names::print_names::PRINT_TVALUE_RAW,
-            self.context
-                .void_type()
-                .fn_type(&[], false),
+            self.context.void_type().fn_type(&[], false),
         );
         let write = self.module.get_function("write").expect("write");
-        let trap = Intrinsic::find("llvm.trap").expect("llvm.trap");        
+        let trap = Intrinsic::find("llvm.trap").expect("llvm.trap");
         let trap_fn = trap
             .get_declaration(&self.module, &[])
             .expect("llvm.trap decl");
         let msg = self.context.const_string(b"ERROR UNKNOWN DATA TYPE", false);
         let msg_ptr = self.builder.build_alloca(msg.get_type(), "msg_ptr");
-        self.builder.build_call(write, &[
-            self.context.i32_type().const_int(2, false).into(),
-            msg_ptr.into(),
-            self.context.i32_type().const_int(msg.get_type().len() as _, false).into()
-        ], "_");
+        self.builder.build_call(
+            write,
+            &[
+                self.context.i32_type().const_int(2, false).into(),
+                msg_ptr.into(),
+                self.context
+                    .i32_type()
+                    .const_int(msg.get_type().len() as _, false)
+                    .into(),
+            ],
+            "_",
+        );
         self.builder.build_call(trap_fn, &[], "_");
         self.builder.build_return(None);
         f

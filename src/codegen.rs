@@ -292,13 +292,20 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     pub fn emit_write_str(&self, s: &str) {
-        let b = self.builder.build_alloca(self.context.i8_type().array_type(s.len() as _), "new_line");
-        self.builder.build_store(b, self.context.const_string(s.as_bytes(), false));
-        self.builder.build_call(self.helpers.write, &[
-            self.const_i32(1).into(),
-            b.into(),
-            self.const_i32(s.len() as _).into(),
-        ], "_");
+        let b = self
+            .builder
+            .build_alloca(self.context.i8_type().array_type(s.len() as _), "new_line");
+        self.builder
+            .build_store(b, self.context.const_string(s.as_bytes(), false));
+        self.builder.build_call(
+            self.helpers.write,
+            &[
+                self.const_i32(1).into(),
+                b.into(),
+                self.const_i32(s.len() as _).into(),
+            ],
+            "_",
+        );
     }
 }
 
