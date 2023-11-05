@@ -68,7 +68,8 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/oranda/releases/latest/download/oranda-installer.sh | sh
           oranda build \
-            && cp ./Luminary\ Logo.svg ./public
+            && cp ./Luminary\ Logo.svg ./public \
+            && cp ./static/favicon.ico ./public
       
       - name: Prepare HTML for link checking
         # untitaker/hyperlink supports no site prefixes, move entire site into
