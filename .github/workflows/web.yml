@@ -69,7 +69,11 @@ jobs:
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/oranda/releases/latest/download/oranda-installer.sh | sh
           oranda build \
             && cp ./Luminary\ Logo.svg ./public \
-            && cp ./static/favicon.ico ./public
+            && for file in $(find public -name *.html); do
+              cat $file \
+                  | sed -e 's/favicon.ico/Luminary%20Logo.svg/' \
+                  | sed -e 's/link rel="icon"/link sizes="any" type="image\/svg+xml" rel="icon"/' | tee $file
+            done
       
       - name: Prepare HTML for link checking
         # untitaker/hyperlink supports no site prefixes, move entire site into
