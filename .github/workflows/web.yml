@@ -67,12 +67,16 @@ jobs:
       - name: Install and run oranda
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/oranda/releases/latest/download/oranda-installer.sh | sh
-          oranda build
+          oranda build \
+            && cp ./Luminary\ Logo.svg ./public
       
       - name: Prepare HTML for link checking
         # untitaker/hyperlink supports no site prefixes, move entire site into
         # a subfolder
-        run: mkdir -p /tmp/public && cp -R public /tmp/public/luminary
+        run: |
+          mkdir -p /tmp/public \
+            && cp -R public /tmp/public/luminary \
+            
 
       - name: Check HTML for broken internal links
         uses: untitaker/hyperlink@0.1.29
