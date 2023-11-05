@@ -1,0 +1,178 @@
+---
+source: src/tvalue/float_to_string.rs
+expression: m.to_string()
+---
+; ModuleID = 'snapshot::float_to_string'
+source_filename = "snapshot::float_to_string"
+
+@PRECISION = constant float 0x3F1A36E2E0000000
+
+define void @"std::float_to_string::append_char"(ptr %buf_ptr, ptr %len_ptr, i8 %value) {
+entry:
+  %len = load i32, ptr %len_ptr, align 4
+  %next_len = add i32 %len, 1
+  %ch_ptr = getelementptr [0 x i8], ptr %buf_ptr, i32 0, i32 %len
+  store i8 %value, ptr %ch_ptr, align 1
+  store i32 %next_len, ptr %len_ptr, align 4
+  ret void
+}
+
+define void @"std::float_to_string::append"(ptr %buf_ptr, ptr %len_ptr, i8 %value) {
+entry:
+  %ch = add i8 48, %value
+  call void @"std::float_to_string::append_char"(ptr %buf_ptr, ptr %len_ptr, i8 %ch)
+  ret void
+}
+
+define i32 @"std::float_to_string::float_to_string"(float %value, ptr %dest) {
+entry:
+  %n = fcmp uno float %value, 0.000000e+00
+  br i1 %n, label %isnan, label %isnnan
+
+isnan:                                            ; preds = %entry
+  store [3 x i8] c"nan", ptr %dest, align 1
+  ret i32 3
+
+isnnan:                                           ; preds = %entry
+  %inf = fcmp oeq float %value, 0x7FF0000000000000
+  br i1 %inf, label %isinf, label %isninf
+
+isinf:                                            ; preds = %isnnan
+  store [3 x i8] c"inf", ptr %dest, align 1
+  ret i32 3
+
+isninf:                                           ; preds = %isnnan
+  %z = fcmp oeq float %value, 0.000000e+00
+  br i1 %z, label %isz, label %isnz
+
+isz:                                              ; preds = %isninf
+  store [1 x i8] c"0", ptr %dest, align 1
+  ret i32 1
+
+isnz:                                             ; preds = %isninf
+  %m_ptr = alloca i32, align 4
+  %n_ptr = alloca float, align 4
+  store float %value, ptr %n_ptr, align 4
+  %ret_ptr = alloca float, align 4
+  store i32 0, ptr %ret_ptr, align 4
+  %neg = call i1 @"std::float_to_string::check_for_neg"(ptr %dest, ptr %n_ptr, ptr %ret_ptr)
+  %n1 = load float, ptr %n_ptr, align 4
+  %m = call i32 @"std::float_to_string::calculate_magnitude"(float %n1)
+  store i32 %m, ptr %m_ptr, align 4
+  br label %loop_top
+
+loop_top:                                         ; preds = %loop_body, %isnz
+  %should_continue = call i1 @"std::float_to_string::loop_should_continue"(ptr %n_ptr, ptr %m_ptr)
+  br i1 %should_continue, label %loop_body, label %loop_exit
+
+loop_exit:                                        ; preds = %loop_top
+  %ret = load i32, ptr %ret_ptr, align 4
+  ret i32 %ret
+
+loop_body:                                        ; preds = %loop_top
+  call void @"std::float_to_string::precision_loop_step"(ptr %dest, ptr %n_ptr, ptr %m_ptr, ptr %ret_ptr)
+  br label %loop_top
+}
+
+define i1 @"std::float_to_string::check_for_neg"(ptr %buf, ptr %n_ptr, ptr %0) {
+entry:
+  %n = load float, ptr %n_ptr, align 4
+  %neg = fcmp olt float %n, 0.000000e+00
+  br i1 %neg, label %is_neg, label %not_neg
+
+is_neg:                                           ; preds = %entry
+  %inverted = fneg float %n
+  store float %inverted, ptr %n_ptr, align 4
+  call void @"std::float_to_string::append_char"(ptr %buf, ptr %0, i8 45)
+  ret i1 %neg
+
+not_neg:                                          ; preds = %entry
+  ret i1 false
+}
+
+define i32 @"std::float_to_string::calculate_magnitude"(float %n) {
+entry:
+  %mf = call float @llvm.log10.f32(float %n)
+  %mf_lt1 = fcmp olt float %mf, 1.000000e+00
+  br i1 %mf_lt1, label %lt1, label %ge1
+
+lt1:                                              ; preds = %entry
+  ret i32 0
+
+ge1:                                              ; preds = %entry
+  %m = fptosi float %mf to i32
+  ret i32 %m
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare float @llvm.log10.f32(float) #0
+
+define i1 @"std::float_to_string::loop_should_continue"(ptr %n_ptr, ptr %m_ptr) {
+entry:
+  %n = load float, ptr %n_ptr, align 4
+  %m = load i32, ptr %m_ptr, align 4
+  %prec = load float, ptr @PRECISION, align 4
+  %n_gt_prec = fcmp ogt float %n, %prec
+  br i1 %n_gt_prec, label %ret_true, label %check_m
+
+check_m:                                          ; preds = %entry
+  %m_ge_z = icmp sge i32 %m, 0
+  br i1 %m_ge_z, label %ret_true, label %ret_false
+
+ret_true:                                         ; preds = %check_m, %entry
+  ret i1 true
+
+ret_false:                                        ; preds = %check_m
+  ret i1 false
+}
+
+define void @"std::float_to_string::precision_loop_step"(ptr %buf, ptr %n_ptr, ptr %m_ptr, ptr %len) {
+entry:
+  %n = load float, ptr %n_ptr, align 4
+  %m = load i32, ptr %m_ptr, align 4
+  %m1 = sitofp i32 %m to float
+  %weight = call float @llvm.pow.f32(float 1.000000e+01, float %m1)
+  %weight_gt_zero = fcmp ogt float %weight, 0.000000e+00
+  br i1 %weight_gt_zero, label %wgtz, label %after_digit
+
+wgtz:                                             ; preds = %entry
+  %weight_is_inf = fcmp oeq float %weight, 0x7FF0000000000000
+  br i1 %weight_is_inf, label %after_digit, label %digit_bb
+
+digit_bb:                                         ; preds = %wgtz
+  %digit_pre = fdiv float %n, %weight
+  %digit_pre2 = call float @llvm.floor.f32(float %digit_pre)
+  %n_update = fmul float %digit_pre2, %weight
+  %digit = fptoui float %digit_pre2 to i8
+  call void @"std::float_to_string::append"(ptr %buf, ptr %len, i8 %digit)
+  %new_n = fsub float %n, %n_update
+  store float %new_n, ptr %n_ptr, align 4
+  br label %after_digit
+
+after_digit:                                      ; preds = %digit_bb, %wgtz, %entry
+  %m_eq_z = icmp eq i32 %m, 0
+  br i1 %m_eq_z, label %m_eq_z_bb, label %after_dot
+
+m_eq_z_bb:                                        ; preds = %after_digit
+  %n2 = load float, ptr %n_ptr, align 4
+  %n_gt_z = fcmp ogt float %n2, 0.000000e+00
+  br i1 %n_gt_z, label %handle_dot, label %after_dot
+
+handle_dot:                                       ; preds = %m_eq_z_bb
+  call void @"std::float_to_string::append_char"(ptr %buf, ptr %len, i8 46)
+  br label %after_dot
+
+after_dot:                                        ; preds = %handle_dot, %m_eq_z_bb, %after_digit
+  %new_m = sub i32 %m, 1
+  store i32 %new_m, ptr %m_ptr, align 4
+  ret void
+}
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare float @llvm.pow.f32(float, float) #0
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare float @llvm.floor.f32(float) #0
+
+attributes #0 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+

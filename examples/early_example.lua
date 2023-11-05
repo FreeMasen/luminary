@@ -1,10 +1,4 @@
 a = 1
-print(a)
 b = 2.5
-print(b)
 c = a + b
-print(c)
-print "hello world"
-print(true)
-print(false)
-print(nil)
+print(a, b, c, "hello world", true, false, nil)

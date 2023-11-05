@@ -1,24 +1,23 @@
 //! This module is for generating a "standard library" that outlines how all lua values
 //! will be represented in the LLVM IR, operator functions, etc.
 
-use std::collections::HashMap;
 
 use inkwell::{
-    attributes::Attribute,
+    attributes::{Attribute, AttributeLoc},
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
-    debug_info::{
-        AsDIScope, DIBasicType, DICompileUnit, DIFile, DIScope, DIType, DebugInfoBuilder,
-    },
     intrinsics::Intrinsic,
     module::Module,
-    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType},
+    types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType},
     values::{
         AnyValue, BasicMetadataValueEnum, BasicValue, FloatValue, FunctionValue, IntValue,
         PointerValue,
-    },
+    }, FloatPredicate,
 };
+
+mod float_to_string;
+pub use float_to_string::add_float_to_string;
 
 pub enum TValue {
     Nil,
@@ -35,43 +34,53 @@ pub struct TValueModuleBuilder<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    debug_builder: DebugInfoBuilder<'ctx>,
-    #[allow(unused)]
-    debug_compile_unit: DICompileUnit<'ctx>,
-    debug_file: DIFile<'ctx>,
-    global_scope: DIScope<'ctx>,
-    di_types: DebugTypes<'ctx>,
-}
-#[allow(dead_code)]
-struct DebugTypes<'ctx> {
-    bool_type: DIBasicType<'ctx>,
-    i8_type: DIBasicType<'ctx>,
-    i32_type: DIBasicType<'ctx>,
-    i64_type: DIBasicType<'ctx>,
-    f32_type: DIBasicType<'ctx>,
-    others: HashMap<String, DIType<'ctx>>,
+    // debug_builder: DebugInfoBuilder<'ctx>,
+    // #[allow(unused)]
+    // debug_compile_unit: DICompileUnit<'ctx>,
+    // debug_file: DIFile<'ctx>,
+    // global_scope: DIScope<'ctx>,
+    // di_types: DebugTypes<'ctx>,
 }
 
-impl<'ctx> DebugTypes<'ctx> {
-    fn new(builder: &DebugInfoBuilder<'ctx>) -> Self {
-        let i8_type = builder.create_basic_type("i8", 8, 0, 0).unwrap();
-        Self {
-            i8_type,
-            bool_type: builder.create_basic_type("i1", 1, 0, 0).unwrap(),
-            i32_type: builder.create_basic_type("i32", 32, 0, 0).unwrap(),
-            i64_type: builder.create_basic_type("i64", 64, 0, 0).unwrap(),
-            f32_type: builder.create_basic_type("f32", 32, 0, 0).unwrap(),
-            others: HashMap::new(),
-        }
+// #[allow(dead_code)]
+// struct DebugTypes<'ctx> {
+//     bool_type: DIBasicType<'ctx>,
+//     i8_type: DIBasicType<'ctx>,
+//     i32_type: DIBasicType<'ctx>,
+//     i64_type: DIBasicType<'ctx>,
+//     f32_type: DIBasicType<'ctx>,
+//     others: HashMap<String, DIType<'ctx>>,
+// }
+
+// impl<'ctx> DebugTypes<'ctx> {
+//     fn new(builder: &DebugInfoBuilder<'ctx>) -> Self {
+//         let i8_type = builder.create_basic_type("i8", 8, 0, 0).unwrap();
+//         Self {
+//             i8_type,
+//             bool_type: builder.create_basic_type("i1", 1, 0, 0).unwrap(),
+//             i32_type: builder.create_basic_type("i32", 32, 0, 0).unwrap(),
+//             i64_type: builder.create_basic_type("i64", 64, 0, 0).unwrap(),
+//             f32_type: builder.create_basic_type("f32", 32, 0, 0).unwrap(),
+//             others: HashMap::new(),
+//         }
+//     }
+// }
+pub(crate) mod tvalue_tags {
+    pub mod types {
+        pub const NIL: i8 = 0;
+        pub const BOOL: i8 = 1;
+        pub const INT: i8 = 2;
+        pub const FLOAT: i8 = 3;
+        pub const STRING_CONST: i8 = 4;
     }
 }
-
 pub(crate) mod tvalue_names {
     pub const MODULE_NAME: &str = "std::tvalue";
     pub mod types {
         pub const BASE: &str = "std::tvalue::TValue";
         pub const NIL: &str = "std::tvalue::TValue::Nil";
         pub const BOOL: &str = "std::tvalue::TValue::Bool";
+        pub const INT: &str = "std::tvalue::TValue::Integer";
         pub const NUMBER: &str = "std::tvalue::TValue::Number";
         pub const STRING: &str = "std::tvalue::TValue::String";
         // pub const TABLE: &str = "std::tvalue::TValue::Table";
@@ -92,10 +101,14 @@ pub(crate) mod tvalue_names {
         pub const IS_TWO_NUMBERS: &str = "std::tvalue::is_two_numbers";
         pub const IS_INT: &str = "std::tvalue::is_int";
         pub const IS_TWO_INTS: &str = "std::tvalue::is_two_ints";
+        pub const IS_STRING: &str = "std::tvalue::is_str";
+        pub const IS_TWO_STRINGS: &str = "std::tvalue::is_two_strs";
     }
 
     pub mod print_names {
         pub const PRINT_TVALUE: &str = "std::tvalue::fmt::print_tvalue";
+        pub const PRINT_TVALUE_NUMBER: &str = "std::tvalue::fmt::print_tvalue_number";
+        pub const PRINT_TVALUE_INT: &str = "std::tvalue::fmt::print_tvalue_int";
         pub const PRINT_TVALUE_STRING: &str = "std::tvalue::fmt::print_tvalue_string";
         pub const PRINT_TVALUE_RAW: &str = "std::tvalue::fmt::print_tvalue_raw";
     }
@@ -129,6 +142,12 @@ pub(crate) mod tvalue_names {
         /// lhs << rhs
         pub const LSH: &str = "std::tvalue::lsh";
     }
+
+    pub mod string {
+        #[allow(unused)]
+        /// lhs .. rhs
+        pub const CONCAT: &str = "std::tvalue::concat";
+    }
 }
 
 pub mod tvalue_generate {}
@@ -138,35 +157,35 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
 
     pub fn new(context: &'ctx Context) -> Self {
         let module = context.create_module(tvalue_names::MODULE_NAME);
-        let (debug_builder, debug_compile_unit) = module.create_debug_info_builder(
-            false,
-            inkwell::debug_info::DWARFSourceLanguage::C,
-            "std_tvalue.ll",
-            ".",
-            "luminary",
-            false,
-            "",
-            1,
-            "",
-            inkwell::debug_info::DWARFEmissionKind::Full,
-            0,
-            false,
-            false,
-            "",
-            "",
-        );
-        let di_file = debug_builder.create_file(&format!("{}.ll", tvalue_names::MODULE_NAME), "");
-        let di_scope = di_file.as_debug_info_scope();
-        let di_types = DebugTypes::new(&debug_builder);
+        // let (debug_builder, debug_compile_unit) = module.create_debug_info_builder(
+        //     false,
+        //     inkwell::debug_info::DWARFSourceLanguage::C,
+        //     "std_tvalue.ll",
+        //     ".",
+        //     "luminary",
+        //     false,
+        //     "",
+        //     1,
+        //     "",
+        //     inkwell::debug_info::DWARFEmissionKind::Full,
+        //     0,
+        //     false,
+        //     false,
+        //     "",
+        //     "",
+        // );
+        // let di_file = debug_builder.create_file(&format!("{}.ll", tvalue_names::MODULE_NAME), "");
+        // let di_scope = di_file.as_debug_info_scope();
+        // let di_types = DebugTypes::new(&debug_builder);
         Self {
             builder: context.create_builder(),
             module,
-            debug_builder,
-            debug_compile_unit,
+            // debug_builder,
+            // debug_compile_unit,
             context,
-            debug_file: di_file,
-            global_scope: di_scope,
-            di_types,
+            // debug_file: di_file,
+            // global_scope: di_scope,
+            // di_types,
         }
     }
 
@@ -191,14 +210,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             .module
             .get_function(tvalue_names::helper_funcs::GET_TAG)
             .unwrap();
-        let printf = self.module.add_function(
-            "printf",
-            self.context.i32_type().fn_type(
-                &[self.context.i8_type().ptr_type(Default::default()).into()],
-                true,
-            ),
-            None,
-        );
         let write = self.module.add_function(
             "write",
             self.context.i32_type().fn_type(
@@ -212,17 +223,21 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             None,
         );
 
+        let print_number = self.add_tvalue_print_number();
+        let print_int = self.add_tvalue_print_int();
         let print_string = self.add_tvalue_print_string();
         let print_unknown = self.add_tvalue_print_unknown();
         let print_tvalue = self.module.add_function(
             tvalue_names::print_names::PRINT_TVALUE,
             self.context.void_type().fn_type(
-                &[self
-                    .module
-                    .get_struct_type(tvalue_names::types::BASE)
-                    .unwrap()
-                    .ptr_type(Default::default())
-                    .into()],
+                &[
+                    self.module
+                        .get_struct_type(tvalue_names::types::BASE)
+                        .unwrap()
+                        .ptr_type(Default::default())
+                        .into(),
+                    self.context.bool_type().into(),
+                ],
                 false,
             ),
             None,
@@ -233,15 +248,15 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             .unwrap()
             .as_any_value_enum()
             .into_pointer_value();
-
         let unknown = self.context.append_basic_block(print_tvalue, "unknown");
         self.builder.position_at_end(unknown);
-        self.builder.build_call(print_unknown, &[arg.into()], "_");
+        self.builder.build_call(print_unknown, &[], "_");
         self.builder.build_return(None);
 
         self.builder.position_at_end(entry);
         let nil = self.context.append_basic_block(print_tvalue, "nil");
         let boolean = self.context.append_basic_block(print_tvalue, "boolean");
+        let int = self.context.append_basic_block(print_tvalue, "int");
         let number = self.context.append_basic_block(print_tvalue, "number");
         let string = self.context.append_basic_block(print_tvalue, "string");
         let tag = self
@@ -252,32 +267,40 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let is_nil = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
             tag,
-            self.context.i8_type().const_int(0, false),
+            self.context.i8_type().const_int(tvalue_tags::types::NIL as _, false),
             "is_nil",
         );
         let not_nil = self.context.append_basic_block(print_tvalue, "notnil");
         self.builder.build_conditional_branch(is_nil, nil, not_nil);
+
         self.builder.position_at_end(not_nil);
         let is_bool = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
             tag,
-            self.context.i8_type().const_int(1, false),
+            self.context.i8_type().const_int(tvalue_tags::types::BOOL as _, false),
             "is_bool",
         );
         let not_bool = self.context.append_basic_block(print_tvalue, "notbool");
         self.builder
             .build_conditional_branch(is_bool, boolean, not_bool);
+
         self.builder.position_at_end(not_bool);
-        let is_num = self.builder.build_int_compare(
+        let is_int = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
             tag,
-            self.context.i8_type().const_int(2, false),
+            self.context.i8_type().const_int(tvalue_tags::types::INT as _, false),
             "is_num",
         );
-
-        let not_num = self.context.append_basic_block(print_tvalue, "notnum");
+        let not_int = self.context.append_basic_block(print_tvalue, "notint");
         self.builder
-            .build_conditional_branch(is_num, number, not_num);
+            .build_conditional_branch(is_int, int, not_int);
+
+        self.builder.position_at_end(not_int);
+        let is_num = self.builder.build_int_compare(
+            inkwell::IntPredicate::EQ, tag, self.context.i8_type().const_int(tvalue_tags::types::FLOAT as _, false), "is_num");
+        let not_num = self.context.append_basic_block(print_tvalue, "notnum");
+        self.builder.build_conditional_branch(is_num, number, not_num);
+
         self.builder.position_at_end(not_num);
         let is_str = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
@@ -293,7 +316,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let nil_fmt = self
             .builder
             .build_alloca(self.context.i8_type().array_type(4), "nil_fmt");
-        let s = b"nil\n"
+        let s = b"nil"
             .into_iter()
             .map(|c| self.context.i8_type().const_int(*c as _, false))
             .collect::<Vec<_>>();
@@ -331,11 +354,12 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let bool_false = self.context.append_basic_block(print_tvalue, "bool_false");
         self.builder
             .build_conditional_branch(truthy, bool_true, bool_false);
+
         self.builder.position_at_end(bool_true);
         let true_fmt = self
             .builder
             .build_alloca(self.context.i8_type().array_type(4), "nil_fmt");
-        let s: Vec<IntValue<'_>> = b"true\n"
+        let s: Vec<IntValue<'_>> = b"true"
             .into_iter()
             .map(|c| self.context.i8_type().const_int(*c as _, false))
             .collect::<Vec<_>>();
@@ -356,7 +380,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         let false_fmt = self
             .builder
             .build_alloca(self.context.i8_type().array_type(4), "nil_fmt");
-        let s: Vec<IntValue<'_>> = b"false\n"
+        let s: Vec<IntValue<'_>> = b"false"
             .into_iter()
             .map(|c| self.context.i8_type().const_int(*c as _, false))
             .collect::<Vec<_>>();
@@ -372,38 +396,17 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             "_",
         );
         self.builder.build_return(None);
+        
+        self.builder.position_at_end(int);
+        self.builder.build_call(print_int, &[arg.into()], "_");
+        self.builder.build_return(None);
+        
 
         self.builder.position_at_end(number);
-        let num_ptr = self
-            .builder
-            .build_struct_gep(
-                self.module
-                    .get_struct_type(tvalue_names::types::NUMBER)
-                    .unwrap(),
-                arg,
-                1,
-                "num_ptr",
-            )
-            .unwrap();
-        let num = self
-            .builder
-            .build_load(self.context.f32_type(), num_ptr, "num");
-        let dbl =
-            self.builder
-                .build_float_ext(num.into_float_value(), self.context.f64_type(), "dbl");
-        let s = b"%f\n\0";
-        let num_fmt = self
-            .builder
-            .build_alloca(self.context.i8_type().array_type(s.len() as _), "num_fmt");
-        let bytes = s
-            .into_iter()
-            .map(|b| self.context.i8_type().const_int(*b as _, false))
-            .collect::<Vec<_>>();
-        let bytes = self.context.i8_type().const_array(&bytes);
-        self.builder.build_store(num_fmt, bytes);
-        self.builder
-            .build_call(printf, &[num_fmt.into(), dbl.into()], "_");
+        self.builder.build_call(print_number, &[arg.into()], "_");
+
         self.builder.build_return(None);
+
         self.builder.position_at_end(string);
         self.builder.build_call(print_string, &[arg.into()], "_");
         self.builder.build_return(None);
@@ -448,112 +451,151 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
             "_",
         );
-        let nl = self
-            .builder
-            .build_alloca(self.context.i8_type().array_type(1), "nl");
-        self.builder.build_store(
-            nl,
-            self.context
-                .i8_type()
-                .const_array(&[self.context.i8_type().const_int(b'\n' as _, false)]),
-        );
-        self.builder.build_call(
-            write,
-            &[
-                self.context.i32_type().const_int(1, false).into(),
-                nl.into(),
-                self.context.i32_type().const_int(1, false).into(),
-            ],
-            "_",
-        );
+
         self.builder.build_return(None);
         f
     }
 
-    fn add_tvalue_print_unknown(&self) -> FunctionValue<'ctx> {
-        let base_ty = self
+    fn add_tvalue_print_number(&self) -> FunctionValue<'ctx> {
+        let ty = self
             .module
-            .get_struct_type(tvalue_names::types::BASE)
+            .get_struct_type(tvalue_names::types::NUMBER)
             .unwrap();
-        let printf = self.module.get_function("printf").unwrap();
-        let (f, entry) = self.add_function(
-            tvalue_names::print_names::PRINT_TVALUE_RAW,
+        let write = self.module.get_function("write").unwrap();
+        let ftos = self
+            .module
+            .get_function(float_to_string::names::FLOAT_TO_STRING)
+            .expect(float_to_string::names::FLOAT_TO_STRING);
+        let (f, _entry) = self.add_function(
+            tvalue_names::print_names::PRINT_TVALUE_NUMBER,
             self.context
                 .void_type()
-                .fn_type(&[base_ty.ptr_type(Default::default()).into()], false),
+                .fn_type(&[ty.ptr_type(Default::default()).into()], false),
         );
         let arg = f.get_first_param().unwrap().into_pointer_value();
-        let base_size_ptr = unsafe {
-            self.builder.build_gep(
-                base_ty,
-                self.context
-                    .i8_type()
-                    .ptr_type(Default::default())
-                    .const_null(),
-                &[self.context.i32_type().const_int(1, false)],
-                "size_ptr",
-            )
-        };
-        let size = self
+        let value_ptr = self
             .builder
-            .build_ptr_to_int(base_size_ptr, self.context.i32_type(), "size");
-        let loop_top = self.context.append_basic_block(f, "looptop");
-        let exit = self.context.append_basic_block(f, "exit");
-        let start_brace = self
+            .build_struct_gep(ty, arg, 1, "value_ptr")
+            .unwrap();
+        let value = self
             .builder
-            .build_alloca(self.context.i8_type().array_type(2), "ob");
-        self.builder
-            .build_store(start_brace, self.context.const_string(b"[", true));
-        self.builder.build_call(printf, &[start_brace.into()], "_");
-        self.builder.build_unconditional_branch(loop_top);
-        self.builder.position_at_end(loop_top);
-        let phi = self.builder.build_phi(self.context.i32_type(), "idx");
-        let next_idx = self.builder.build_int_add(
-            phi.as_any_value_enum().into_int_value(),
-            self.context.i32_type().const_int(1, false),
-            "nextidx",
+            .build_load(self.context.f32_type(), value_ptr, "len")
+            .into_float_value();
+        let too_large = self.context.append_basic_block(f, "too_large");
+        let not_too_large = self.context.append_basic_block(f, "not_too_large");
+        let is_too_large = self.builder.build_float_compare(
+            inkwell::FloatPredicate::OGE,
+            value,
+            self.context.f32_type().const_float(1000000000.0),
+            "is_too_large",
         );
-        phi.add_incoming(&[
-            (&next_idx, loop_top),
-            (&self.context.i32_type().const_int(0, false), entry),
-        ]);
-        let ch = unsafe {
-            self.builder.build_gep(
-                self.context.i8_type().array_type(16),
-                arg,
-                &[
-                    self.context.i32_type().const_int(0, false),
-                    phi.as_basic_value().into_int_value(),
-                ],
-                "ch",
-            )
-        };
-        let ch = self.builder.build_load(self.context.i8_type(), ch, "ch");
-        let ch_fmt = self
-            .builder
-            .build_alloca(self.context.i8_type().array_type(5), "ch_fmt");
         self.builder
-            .build_store(ch_fmt, self.context.const_string(b"%*i,", true));
+            .build_conditional_branch(is_too_large, too_large, not_too_large);
+
+        self.builder.position_at_end(not_too_large);
+        let bytes_ptr = self
+            .builder
+            .build_alloca(self.context.i8_type().array_type(255), "bytes_ptr");
+        let len = self
+            .builder
+            .build_call(ftos, &[value.into(), bytes_ptr.into()], "len")
+            .as_any_value_enum()
+            .into_int_value();
         self.builder.build_call(
-            printf,
+            write,
             &[
-                ch_fmt.into(),
-                self.context.i8_type().const_int(3, false).into(),
-                ch.into(),
+                self.context.i32_type().const_int(1, false).into(),
+                bytes_ptr.into(),
+                len.into(),
             ],
             "_",
         );
-        let br = self
+        self.builder.build_return(None);
+
+        self.builder.position_at_end(too_large);
+        let msg = b"<error float too large to print>";
+        let buf = self
             .builder
-            .build_int_compare(inkwell::IntPredicate::UGE, next_idx, size, "done");
-        self.builder.build_conditional_branch(br, exit, loop_top);
-        self.builder.position_at_end(exit);
-        let end_brace = self
-            .builder
-            .build_alloca(self.context.i8_type().array_type(3), "cb");
+            .build_alloca(self.context.i8_type().array_type(msg.len() as _), "buf");
         self.builder
-            .build_store(end_brace, self.context.const_string(b"]\n", true));
-        self.builder.build_call(printf, &[end_brace.into()], "_");
+            .build_store(buf, self.context.const_string(msg, false));
+        self.builder.build_return(None);
+
+        f
+    }
+
+    fn add_tvalue_print_int(&self) -> FunctionValue<'ctx> {
+        let ty = self
+            .module
+            .get_struct_type(tvalue_names::types::INT)
+            .unwrap();
+        let write = self.module.get_function("write").unwrap();
+        let ftos = self
+            .module
+            .get_function(float_to_string::names::FLOAT_TO_STRING)
+            .expect(float_to_string::names::FLOAT_TO_STRING);
+        let (f, _entry) = self.add_function(
+            tvalue_names::print_names::PRINT_TVALUE_INT,
+            self.context
+                .void_type()
+                .fn_type(&[ty.ptr_type(Default::default()).into()], false),
+        );
+        let arg = f.get_first_param().unwrap().into_pointer_value();
+        let value_ptr = self
+            .builder
+            .build_struct_gep(ty, arg, 1, "value_ptr")
+            .unwrap();
+        let value = self
+            .builder
+            .build_load(self.context.i32_type(), value_ptr, "len")
+            .into_int_value();
+        let bytes_ptr = self
+            .builder
+            .build_alloca(self.context.i8_type().array_type(255), "bytes_ptr");
+        let len = self
+            .builder
+            .build_call(ftos, &[value.into(), bytes_ptr.into()], "len")
+            .as_any_value_enum()
+            .into_int_value();
+        self.builder.build_call(
+            write,
+            &[
+                self.context.i32_type().const_int(1, false).into(),
+                bytes_ptr.into(),
+                len.into(),
+            ],
+            "_",
+        );
+        self.builder.build_return(None);
+
+        f
+    }
+
+    fn add_tvalue_print_unknown(&self) -> FunctionValue<'ctx> {
+        let (f, _) = self.add_function(
+            tvalue_names::print_names::PRINT_TVALUE_RAW,
+            self.context.void_type().fn_type(&[], false),
+        );
+        let write = self.module.get_function("write").expect("write");
+        let trap = Intrinsic::find("llvm.trap").expect("llvm.trap");
+        let trap_fn = trap
+            .get_declaration(&self.module, &[])
+            .expect("llvm.trap decl");
+        let msg = self.context.const_string(b"ERROR UNKNOWN DATA TYPE", false);
+        let msg_ptr = self.builder.build_alloca(msg.get_type(), "msg_ptr");
+        self.builder.build_call(
+            write,
+            &[
+                self.context.i32_type().const_int(2, false).into(),
+                msg_ptr.into(),
+                self.context
+                    .i32_type()
+                    .const_int(msg.get_type().len() as _, false)
+                    .into(),
+            ],
+            "_",
+        );
+        self.builder.build_call(trap_fn, &[], "_");
         self.builder.build_return(None);
         f
     }
@@ -574,6 +616,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
     pub fn gen_lib(&mut self) -> Module<'ctx> {
         self.gen_types();
         self.init_foreign_fns();
+        float_to_string::add_float_to_string(&self.module);
         self.add_init_nil();
         self.add_init_bool();
         self.add_init_number();
@@ -595,12 +638,14 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.add_tvalue_neg();
         self.add_is_int();
         self.add_is_two_ints();
+        self.add_is_str();
+        self.add_is_two_strs();
         self.add_tvalue_bin_and();
         self.add_tvalue_bin_or();
         self.add_tvalue_bin_lsh();
         self.add_tvalue_bin_rsh();
         self.add_tvalue_bin_not();
-        self.debug_builder.finalize();
+        // self.debug_builder.finalize();
         self.verify();
         self.module.clone()
     }
@@ -625,6 +670,63 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             tvalue_names::ctors::NUMBER,
             2,
         );
+    }
+
+    fn add_init_integer(&self) {
+        let ret_ty = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap_or_else(|| panic!("{} is not defined", tvalue_names::types::BASE));
+        let (f, _) = self.add_function(tvalue_names::ctors::NUMBER, self.context.void_type().fn_type(&[
+            ret_ty.ptr_type(Default::default()).into(),
+            self.context.f32_type().into(),
+        ], false));
+        let arg1 = f.get_first_param().expect("1 arg");
+        self.apply_sret_to_param(&f, 0, None);
+        let arg2 = f.get_last_param().unwrap().into_float_value();
+        let int_bb = self.context.append_basic_block(f, "int_bb");
+        let num_bb = self.context.append_basic_block(f, "num_bb");
+        let rem = self.builder.build_float_rem(arg2, self.context.f32_type().const_float(1.0), "rem");
+        let rem_iz = self.builder.build_float_compare(FloatPredicate::OEQ, rem, self.context.f32_type().const_float(0.0), "rem_iz");
+        self.builder.build_conditional_branch(rem_iz, int_bb, num_bb);
+        
+        self.builder.position_at_end(int_bb);
+        let ret_ty = self.module.get_struct_type(tvalue_names::types::INT).unwrap();
+        let int_value = self.builder.build_float_to_signed_int(arg2, self.context.i32_type(), "int_value");
+        // TODO: this tests for float to int rounding, if that happens we need to treat this value
+        // as a float regardless. Some of the math operations will not work in that case, something
+        // should be done about that.
+        let rt = self.builder.build_signed_int_to_float(int_value, self.context.f32_type(), "rt");
+        let int_cont = self.context.append_basic_block(f, "int_cont");
+        let frreal = self.builder.build_float_compare(FloatPredicate::OEQ, arg2, rt, "frreal");
+        self.builder.build_conditional_branch(frreal, int_cont, num_bb);
+
+        self.builder.position_at_end(int_cont);
+        let data_ptr = self
+            .builder
+            .build_struct_gep(
+                ret_ty,
+                arg1.as_any_value_enum().into_pointer_value(),
+                1,
+                "data_ptr",
+            )
+            .expect("data_ptr");
+        self.builder.build_store(data_ptr, int_value);
+        self.builder.build_return(None);
+
+        self.builder.position_at_end(num_bb);
+        let ret_ty = self.module.get_struct_type(tvalue_names::types::NUMBER).unwrap();
+        let data_ptr = self
+            .builder
+            .build_struct_gep(
+                ret_ty,
+                arg1.as_any_value_enum().into_pointer_value(),
+                1,
+                "data_ptr",
+            )
+            .expect("data_ptr");
+        self.builder.build_store(data_ptr, arg2);
+        self.builder.build_return(None);
     }
 
     fn add_init_string(&self) {
@@ -679,33 +781,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 self.context.i8_type().array_type(Self::DATA_SIZE).into(),
             ],
         );
-        let base_type = self.debug_builder.create_struct_type(
-            self.global_scope,
-            tvalue_names::types::BASE,
-            self.debug_file,
-            3,
-            8 * 16,
-            8,
-            0,
-            None,
-            &[
-                self.di_types.i8_type.as_type(),
-                self.debug_builder
-                    .create_array_type(
-                        self.di_types.i8_type.as_type(),
-                        (8 * Self::DATA_SIZE) as u64,
-                        8,
-                        &[],
-                    )
-                    .as_type(),
-            ],
-            0,
-            None,
-            tvalue_names::types::BASE,
-        );
-        self.di_types
-            .others
-            .insert(tvalue_names::types::BASE.into(), base_type.as_type());
         self.gen_type(
             tvalue_names::types::NIL,
             &[
@@ -714,33 +789,6 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
             ],
         );
 
-        let nil_variant = self.debug_builder.create_struct_type(
-            self.global_scope,
-            tvalue_names::types::NIL,
-            self.debug_file,
-            3,
-            8 * 16,
-            8,
-            0,
-            None,
-            &[
-                self.di_types.i8_type.as_type(),
-                self.debug_builder
-                    .create_array_type(
-                        self.di_types.i8_type.as_type(),
-                        (8 * Self::DATA_SIZE) as u64,
-                        8,
-                        &[],
-                    )
-                    .as_type(),
-            ],
-            0,
-            None,
-            tvalue_names::types::NIL,
-        );
-        self.di_types
-            .others
-            .insert(tvalue_names::types::NIL.into(), nil_variant.as_type());
         self.gen_type(
             tvalue_names::types::BOOL,
             &[
@@ -748,33 +796,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 self.context.i8_type().into(),
             ],
         );
-        let bool_variant = self.debug_builder.create_struct_type(
-            self.global_scope,
-            tvalue_names::types::BOOL,
-            self.debug_file,
-            3,
-            8 * 16,
-            8,
-            0,
-            None,
-            &[
-                self.di_types.i8_type.as_type(),
-                self.debug_builder
-                    .create_array_type(
-                        self.di_types.i8_type.as_type(),
-                        (8 * Self::DATA_SIZE) as u64,
-                        8,
-                        &[],
-                    )
-                    .as_type(),
-            ],
-            0,
-            None,
-            tvalue_names::types::BOOL,
-        );
-        self.di_types
-            .others
-            .insert(tvalue_names::types::BOOL.into(), bool_variant.as_type());
+        
         self.gen_type(
             tvalue_names::types::NUMBER,
             &[
@@ -785,26 +807,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 self.context.f32_type().into(),
             ],
         );
-        let num_variant = self.debug_builder.create_struct_type(
-            self.global_scope,
-            tvalue_names::types::NUMBER,
-            self.debug_file,
-            3,
-            8 * 16,
-            8,
-            0,
-            None,
-            &[
-                self.di_types.i8_type.as_type(),
-                self.di_types.f32_type.as_type(),
-            ],
-            0,
-            None,
-            tvalue_names::types::NUMBER,
-        );
-        self.di_types
-            .others
-            .insert(tvalue_names::types::NUMBER.into(), num_variant.as_type());
+        
 
         self.gen_type(
             tvalue_names::types::STRING,
@@ -821,36 +824,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 self.context.i8_type().ptr_type(Default::default()).into(),
             ],
         );
-        let string_variant = self.debug_builder.create_struct_type(
-            self.global_scope,
-            tvalue_names::types::STRING,
-            self.debug_file,
-            3,
-            8 * 16,
-            8,
-            0,
-            None,
-            &[
-                self.di_types.i8_type.as_type(),
-                self.di_types.i32_type.as_type(),
-                self.di_types.i32_type.as_type(),
-                self.debug_builder
-                    .create_pointer_type(
-                        "byte_array_ptr",
-                        self.di_types.i8_type.as_type(),
-                        32,
-                        8,
-                        Default::default(),
-                    )
-                    .as_type(),
-            ],
-            0,
-            None,
-            tvalue_names::types::STRING,
-        );
-        self.di_types
-            .others
-            .insert(tvalue_names::types::STRING.into(), string_variant.as_type());
+        
     }
 
     fn gen_type(&self, name: &str, fields: &[BasicTypeEnum<'ctx>]) {
@@ -894,7 +868,23 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.builder
             .build_store(tag_ptr, self.context.i8_type().const_int(variant_id, false));
     }
-
+    fn apply_sret_to_param(
+        &self,
+        f: &FunctionValue<'ctx>,
+        param_idx: u32,
+        ty: impl Into<Option<AnyTypeEnum<'ctx>>>,
+    ) {
+        let ty = ty.into().unwrap_or_else(|| {
+            let base = self
+                .module
+                .get_struct_type(tvalue_names::types::BASE)
+                .unwrap();
+            base.into()
+        });
+        let kind_id = Attribute::get_named_enum_kind_id("sret");
+        let attr = self.context.create_type_attribute(kind_id, ty);
+        f.add_attribute(AttributeLoc::Param(param_idx), attr);
+    }
     fn add_new_simple_init(
         &self,
         struct_name: &str,
@@ -918,6 +908,7 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 "_",
             );
         }
+        self.apply_sret_to_param(&f, 0, None);
         if f.count_params() < 2 {
             let data_ptr = self
                 .builder
@@ -1118,10 +1109,26 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 .into()],
             "tag",
         );
+        let int_bb = self.context.append_basic_block(get_tag, "int_bb");
+        let nint_bb = self.context.append_basic_block(get_tag, "nint_bb");
+
+
+        let iint = self.builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            tag.as_any_value_enum().into_int_value(),
+            self.context.i8_type().const_int(tvalue_tags::types::INT as _, false),
+            "iint",
+        );
+        self.builder.build_conditional_branch(iint, int_bb, nint_bb);
+
+        self.builder.position_at_end(int_bb);
+        self.builder.build_return(Some(&self.context.bool_type().const_int(1, false)));
+
+        self.builder.position_at_end(nint_bb);
         let cmp = self.builder.build_int_compare(
             inkwell::IntPredicate::EQ,
             tag.as_any_value_enum().into_int_value(),
-            self.context.i8_type().const_int(2, false),
+            self.context.i8_type().const_int(tvalue_tags::types::FLOAT as _, false),
             "cmp",
         );
         self.builder.build_return(Some(&cmp));
@@ -1212,13 +1219,14 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 false,
             ),
         );
+        // self.apply_sret_to_param(&f, 0, None);
         let params = f.get_params();
-        let lhs = *params.get(0).expect("1 param");
-        lhs.set_name("lhs");
-        let rhs = *params.get(1).expect("2 params");
-        rhs.set_name("rhs");
-        let out = *params.get(2).expect("3 params");
+        let out = *params.get(2).expect("1 param");
         out.set_name("out");
+        let lhs = *params.get(0).expect("2 params");
+        lhs.set_name("lhs");
+        let rhs = *params.get(1).expect("3 params");
+        rhs.set_name("rhs");
         let ian = self.context.append_basic_block(f, "ian");
         let nan = self.context.append_basic_block(f, "nan");
         let are_nums = self
@@ -1284,9 +1292,11 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
                 two_ints,
                 not_ints,
             );
+
             self.builder.position_at_end(not_ints);
             self.builder
                 .build_return(Some(&self.context.bool_type().const_int(0, false)));
+            
             self.builder.position_at_end(two_ints);
             let lhs = self
                 .builder
@@ -1377,6 +1387,84 @@ impl<'ctx> TValueModuleBuilder<'ctx> {
         self.builder
             .build_return(Some(&self.context.bool_type().const_int(1, false)));
         self.builder.position_at_end(nai);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(0, false)));
+    }
+
+    fn add_is_str(&self) {
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
+        let get_tag_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::GET_TAG)
+            .unwrap();
+        let (f, _e) = self.add_function(
+            tvalue_names::helper_funcs::IS_STRING,
+            self.context
+                .bool_type()
+                .fn_type(&[tvalue.ptr_type(Default::default()).into()], false),
+        );
+
+        let input = f
+            .get_first_param()
+            .unwrap()
+            .as_any_value_enum()
+            .into_pointer_value();
+        let kind = self.builder.build_call(get_tag_fn, &[input.into()], "kind");
+        let is_int = self.builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            kind.as_any_value_enum().into_int_value(),
+            self.context.i8_type().const_int(3, false),
+            "is_str",
+        );
+        self.builder.build_return(Some(&is_int));
+    }
+
+    fn add_is_two_strs(&self) {
+        let tvalue = self
+            .module
+            .get_struct_type(tvalue_names::types::BASE)
+            .unwrap();
+        let is_str_fn = self
+            .module
+            .get_function(tvalue_names::helper_funcs::IS_STRING)
+            .unwrap();
+        let (f, _e) = self.add_function(
+            tvalue_names::helper_funcs::IS_TWO_STRINGS,
+            self.context.bool_type().fn_type(
+                &[
+                    tvalue.ptr_type(Default::default()).into(),
+                    tvalue.ptr_type(Default::default()).into(),
+                ],
+                false,
+            ),
+        );
+        let lhs = f.get_first_param().unwrap().into_pointer_value();
+        lhs.set_name("lhs");
+        let rhs = f.get_last_param().unwrap().into_pointer_value();
+        rhs.set_name("rhs");
+        let lhs_is = self.builder.build_call(is_str_fn, &[lhs.into()], "lhs_is");
+        let lhs_ias = self.context.append_basic_block(f, "lhs_ias");
+        let rhs_ias = self.context.append_basic_block(f, "rhs_ias");
+        let nas = self.context.append_basic_block(f, "nai");
+        self.builder.build_conditional_branch(
+            lhs_is.as_any_value_enum().into_int_value(),
+            lhs_ias,
+            nas,
+        );
+        self.builder.position_at_end(lhs_ias);
+        let rhs_is = self.builder.build_call(is_str_fn, &[rhs.into()], "rhs_is");
+        self.builder.build_conditional_branch(
+            rhs_is.as_any_value_enum().into_int_value(),
+            rhs_ias,
+            nas,
+        );
+        self.builder.position_at_end(rhs_ias);
+        self.builder
+            .build_return(Some(&self.context.bool_type().const_int(1, false)));
+        self.builder.position_at_end(nas);
         self.builder
             .build_return(Some(&self.context.bool_type().const_int(0, false)));
     }
@@ -1763,19 +1851,12 @@ mod test {
             new_num_fun,
             &[context.f32_type().const_float(u32::MAX as _).into()],
         );
-        build_test_tag_func(
-            &context,
-            &module,
-            &builder,
-            "test_str",
-            new_str_fun,
-            &[context.i32_type().const_int(10, false).into()],
-        );
-
+        build_test_tag_func(&context, &module, &builder, "test_str", new_str_fun, &[]);
         maybe_write_test_module("tag_value", &module);
         let jit = module
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
+
         call_tag_test_fn("test_nil", &jit, 0);
         call_tag_test_fn("test_bool", &jit, 1);
         call_tag_test_fn("test_num", &jit, 2);
@@ -1836,7 +1917,7 @@ mod test {
         context: &'ctx Context,
         module: &Module<'ctx>,
         builder: &Builder<'ctx>,
-    ) {
+    ) -> FunctionValue<'ctx> {
         let ty = module.get_struct_type(tvalue_names::types::STRING).unwrap();
         let f = module.add_function(
             "init_hello_world_str",
@@ -1876,6 +1957,7 @@ mod test {
         let len_ptr = builder.build_struct_gep(ty, arg, 1, "len_ptr").unwrap();
         builder.build_store(len_ptr, context.i32_type().const_int(arr.len() as _, false));
         builder.build_return(None);
+        f
     }
 
     #[test]
@@ -1909,7 +1991,7 @@ mod test {
             &module,
             &builder,
             module.get_function(tvalue_names::ctors::NIL).unwrap(),
-            context.bool_type().const_int(0, false).into(),
+            None,
             "test_nil",
         );
         build_truthy_test(
@@ -1917,7 +1999,7 @@ mod test {
             &module,
             &builder,
             module.get_function(tvalue_names::ctors::BOOL).unwrap(),
-            context.bool_type().const_int(1, false).into(),
+            BasicMetadataValueEnum::from(context.bool_type().const_int(1, false)),
             "test_bool_true",
         );
         build_truthy_test(
@@ -1925,7 +2007,7 @@ mod test {
             &module,
             &builder,
             module.get_function(tvalue_names::ctors::BOOL).unwrap(),
-            context.bool_type().const_int(0, false).into(),
+            BasicMetadataValueEnum::from(context.bool_type().const_int(0, false)),
             "test_bool_false",
         );
         build_truthy_test(
@@ -1933,7 +2015,7 @@ mod test {
             &module,
             &builder,
             module.get_function(tvalue_names::ctors::NUMBER).unwrap(),
-            context.f32_type().const_float(1.11).into(),
+            BasicMetadataValueEnum::from(context.f32_type().const_float(1.11)),
             "test_number",
         );
         build_truthy_test(
@@ -1941,7 +2023,7 @@ mod test {
             &module,
             &builder,
             module.get_function("init_hello_world_str").unwrap(),
-            context.i32_type().const_int(10, false).into(),
+            None,
             "test_string",
         );
 
@@ -1962,7 +2044,7 @@ mod test {
         module: &Module<'ctx>,
         builder: &Builder<'ctx>,
         ctor_fn: FunctionValue<'ctx>,
-        ctor_arg: BasicMetadataValueEnum<'ctx>,
+        ctor_arg: impl Into<Option<BasicMetadataValueEnum<'ctx>>>,
         name: &str,
     ) {
         let f = module.add_function(name, context.i32_type().fn_type(&[], false), None);
@@ -1977,12 +2059,16 @@ mod test {
                 .expect("base"),
             "t",
         );
-        builder.build_call(ctor_fn, &[alloc.into(), ctor_arg], "_");
+        let mut args = vec![BasicMetadataValueEnum::from(alloc)];
+        if let Some(arg) = ctor_arg.into() {
+            args.push(arg)
+        }
+        builder.build_call(ctor_fn, &args, "_");
         let ret = builder.build_call(is_bool, &[alloc.into()], "ret");
 
         let ret = builder.build_int_z_extend(
             ret.as_any_value_enum().into_int_value(),
-            context.i8_type(),
+            context.i32_type(),
             "ret",
         );
         builder.build_return(Some(&ret));
@@ -2027,9 +2113,9 @@ mod test {
         let _succ = module_builder.builder.build_call(
             add_fn,
             &[
+                ret.as_basic_value_enum().into(),
                 lhs.as_basic_value_enum().into(),
                 rhs.as_basic_value_enum().into(),
-                ret.as_basic_value_enum().into(),
             ],
             "ret",
         );
@@ -2079,7 +2165,7 @@ mod test {
             .unwrap();
         let op = |l, r| l + r;
         proptest::proptest!(|(l: f32, r: f32)| {
-            execute_happy_math_test(name1, &jit, l, r, op);
+            execute_happy_math_test(name1, &jit, l, r, op).unwrap();
         });
         execute_sad_num_add_test(name2, &jit);
         execute_sad_num_add_test(name3, &jit);
@@ -2097,7 +2183,19 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: f32, r: f32)| {
-        execute_happy_math_test(name1, &jit, l, r, |l, r| l - r)
+            if let Err(msg) = execute_happy_math_test(name1, &jit, l, r, |l, r| l - r) {
+                let b = context.create_builder();
+                let main = module.add_function("main", context.i32_type().fn_type(&[], false), None);
+                let f = module.get_function(name1).unwrap();
+                b.position_at_end(context.append_basic_block(main, "entry"));
+                b.build_call(f, &[
+                    context.f32_type().const_float(l as _).into(),
+                    context.f32_type().const_float(r as _).into(),
+                ], "_");
+                b.build_return(Some(&context.i32_type().const_zero()));
+                maybe_write_test_module("sub", &module);
+                panic!("{msg}");
+            }
         });
     }
 
@@ -2113,7 +2211,7 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: f32, r: f32)| {
-        execute_happy_math_test(name1, &jit, l, r, |l, r| l * r)
+        execute_happy_math_test(name1, &jit, l, r, |l, r| l * r).unwrap()
         });
     }
 
@@ -2129,7 +2227,7 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: f32, r: f32)| {
-            execute_happy_math_test(name1, &jit, l, r, |l, r| l / r)
+            execute_happy_math_test(name1, &jit, l, r, |l, r| l / r).unwrap()
         });
     }
 
@@ -2150,7 +2248,7 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: f32, r: f32)| {
-            execute_happy_math_test(name1, &jit, l, r, |l, r| (l / r).floor())
+            execute_happy_math_test(name1, &jit, l, r, |l, r| (l / r).floor()).unwrap()
         });
     }
 
@@ -2166,7 +2264,7 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: f32, r: f32)| {
-            execute_happy_math_test(name1, &jit, l, r, |l, r| l.powf(r));
+            execute_happy_math_test(name1, &jit, l, r, |l, r| l.powf(r)).unwrap();
         });
     }
 
@@ -2182,7 +2280,7 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: f32, r: f32)| {
-            execute_happy_math_test(name1, &jit, l, r, |l, r| l % r);
+            execute_happy_math_test(name1, &jit, l, r, |l, r| l % r).unwrap();
         });
     }
 
@@ -2200,7 +2298,7 @@ mod test {
         proptest::proptest!(|(l: i32, r: i32)| {
             execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
                 (l as i32 & r as i32) as f32
-            });
+            }).unwrap();
         });
     }
 
@@ -2216,9 +2314,23 @@ mod test {
             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
             .unwrap();
         proptest::proptest!(|(l: i32, r: i32)| {
-            execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
+            if let Err(msg) = execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
                 (l as i32 | r as i32) as f32
-            });
+            }) {
+                let b = context.create_builder();
+                if module.get_function("main").is_none() {
+                    let main = module.add_function("main", context.i32_type().fn_type(&[], false), None);
+                    let f = module.get_function(name1).unwrap();
+                    b.position_at_end(context.append_basic_block(main, "entry"));
+                    b.build_call(f, &[
+                        context.f32_type().const_float(l as _).into(),
+                        context.f32_type().const_float(r as _).into(),
+                    ], "_");
+                    b.build_return(Some(&context.i32_type().const_zero()));
+                }
+                maybe_write_test_module("or", &module);
+                panic!("{msg}");
+            }
         });
     }
 
@@ -2236,7 +2348,7 @@ mod test {
         proptest::proptest!(|(l: i32, r: u32)| {
             execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
                 (l as i32).wrapping_shl(r as u32) as f32
-            });
+            }).unwrap();
         });
     }
 
@@ -2254,7 +2366,7 @@ mod test {
         proptest::proptest!(|(l: i32, r: u32)| {
             execute_happy_math_test(name1, &jit, l as f32, r as f32, |l, r| {
                 ((l as i32).wrapping_shr(r as u32)) as f32
-            });
+            }).unwrap();
         });
     }
 
@@ -2295,33 +2407,38 @@ mod test {
         });
     }
 
+    #[track_caller]
     fn execute_happy_math_test<'ctx>(
         name: &'static str,
         jit: &'ctx ExecutionEngine<'ctx>,
         lhs: f32,
         rhs: f32,
         op: impl Fn(f32, f32) -> f32,
-    ) {
+    ) -> Result<(), String> {
         type TestFunc = unsafe extern "C" fn(f32, f32) -> f32;
         println!("looking up {name}");
         let func: JitFunction<TestFunc> = unsafe {
-            jit.get_function(name).unwrap_or_else(|e| {
-                panic!("{name}: {e}");
+            jit.get_function(name).map_err(|e| {
+                format!("{name}: {e}")
             })
-        };
+        }?;
         let val = unsafe { func.call(lhs, rhs) };
         let expected = op(lhs, rhs);
-        if val.is_nan()
-            && expected.is_nan()
-            && ((val.is_sign_positive() && expected.is_sign_positive())
-                || (val.is_sign_negative() && expected.is_sign_negative()))
-        {
-            return;
+        if val.is_nan() && expected.is_nan() {
+            if val.is_sign_positive() != expected.is_sign_positive() {
+                return Err(format!("{} op {} = {} != {}",
+                lhs, rhs,
+                val,
+                expected
+            ));
+            } else {
+                return Ok(())
+            }
         }
-        assert_eq!(
-            val, expected,
-            "{name}: ({lhs}, {rhs}) -> {val} expected {expected}"
-        );
+        if val != expected {
+            return Err(format!("{name}: ({lhs:?}, {rhs:?}) -> {val} expected {expected}"))
+        }
+        Ok(())
     }
 
     fn execute_happy_unary_math_test<'ctx>(
@@ -2385,7 +2502,7 @@ mod test {
         let entry1 = module_builder.context.append_basic_block(test_fn, "entry");
         module_builder.builder.position_at_end(entry1);
         let lhs = module_builder.emit_new_number("lhs", arg1.as_basic_value_enum().into());
-        let rhs = module_builder.emit_new_number("lhs", arg2.as_basic_value_enum().into());
+        let rhs = module_builder.emit_new_number("rhs", arg2.as_basic_value_enum().into());
         let ret = module_builder.emit_new_number(
             "ret",
             module_builder
@@ -2394,7 +2511,7 @@ mod test {
                 .const_float(f64::NAN)
                 .into(),
         );
-        let _succ = module_builder.builder.build_call(
+        let ok = module_builder.builder.build_call(
             math_fn,
             &[
                 lhs.as_basic_value_enum().into(),
@@ -2402,7 +2519,20 @@ mod test {
                 ret.as_basic_value_enum().into(),
             ],
             "ret",
-        );
+        ).as_any_value_enum().into_int_value();
+        let succ = module_builder.context.append_basic_block(test_fn, "succ");
+        let fail = module_builder.context.append_basic_block(test_fn, "fail");
+        module_builder.builder.build_conditional_branch(ok, succ, fail);
+        
+        module_builder.builder.position_at_end(fail);
+        let trap = Intrinsic::find("llvm.trap").expect("llvm.trap");
+        let trap_fn = trap
+            .get_declaration(&module_builder.module, &[])
+            .expect("llvm.trap decl");
+        module_builder.builder.build_call(trap_fn, &[], "_");
+        module_builder.builder.build_return(Some(&module_builder.context.f32_type().const_float(f64::NAN)));
+
+        module_builder.builder.position_at_end(succ);
         let ret2 =
             module_builder
                 .builder
