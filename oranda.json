@@ -1,0 +1,8 @@
+{
+    "build": {
+        "path_prefix": "luminary"
+    },
+    "styles": {
+        "theme": "hacker"
+    }
+}
