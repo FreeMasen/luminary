@@ -45,4 +45,4 @@ nil
 
 ## Dependencies
 
-`clang` is used for linking the final output of an executable output.
+`cc` is used for linking the final output of an executable output.

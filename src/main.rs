@@ -130,7 +130,7 @@ fn main() {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "link-with-ld"))]
 fn link_exe(obj_path: &Path, dest: &PathBuf) {
     let mut cmd = Command::new("ld");
     cmd.arg(obj_path)
@@ -164,7 +164,7 @@ fn link_exe(obj_path: &Path, dest: &PathBuf) {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(target_os = "linux", feature = "link-with-ld")))]
 fn link_exe(obj_path: &Path, dest: &PathBuf) {
     let mut cmd = Command::new("cc");
     cmd.arg("-o").arg(dest);
