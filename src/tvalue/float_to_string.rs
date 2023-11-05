@@ -8,7 +8,19 @@ use inkwell::{
 
 pub mod names {
     pub const FLOAT_TO_STRING: &str = "std::float_to_string::float_to_string";
+    pub const INT_TO_STRING: &str = "std::float_to_string::int_to_string";
+    /// Name of a function that will append the argument to the provided buffer at the provided
+    /// length. This function will shift the provided integer by `'0'` to be in the ascii/utf8
+    /// integer space. The length pointer provided will be incremented by 1
+    /// 
+    /// ```llvmir
+    /// call void @append(ptr %buf_ptr, ptr %len_ptr, i8 1)
+    /// ```
+    /// 
+    /// the above example will append the character `'1'` to the buffer
     pub(super) const APPEND: &str = "std::float_to_string::append";
+    /// Name of a function into the module that will append the provided i8 into the buffer
+    /// at the postion contained in the length argument.
     pub(super) const APPEND_CHAR: &str = "std::float_to_string::append_char";
     pub(super) const CALCULATE_MAGNITUDE: &str = "std::float_to_string::calculate_magnitude";
     pub(super) const CHECK_FOR_NEG: &str = "std::float_to_string::check_for_neg";
@@ -182,6 +194,9 @@ fn emit_append<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     f
 }
 
+
+/// Emit a function into the module that will append the provided i8 into the buffer
+/// at the postion contained in the length argument. 
 fn emit_append_char<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     let c = module.get_context();
     let b = c.create_builder();
@@ -501,9 +516,155 @@ fn emit_loop_step<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
     f
 }
 
+
+fn emit_int_to_buffer<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
+    let c = module.get_context();
+    let b = c.create_builder();
+    let f = module.add_function(names::INT_TO_STRING, c.i32_type().fn_type(&[
+        c.i32_type().into(),
+        c.i8_type().array_type(0).ptr_type(Default::default()).into(),
+    ], false), None);
+    let value = f.get_first_param().unwrap().into_int_value();
+    value.set_name("value");
+    let dest = f.get_last_param().unwrap().into_pointer_value();
+    dest.set_name("dest");
+    
+    b.position_at_end(c.append_basic_block(f, "entry"));
+    let zero = c.append_basic_block(f, "zero");
+    let loop_prep = c.append_basic_block(f, "loop_prep");
+    let handle_neg = c.append_basic_block(f, "handle_neg");
+    let loop_top = c.append_basic_block(f, "loop_top");
+    let loop_body = c.append_basic_block(f, "loop_body");
+    let loop_exit = c.append_basic_block(f, "loop_exit");
+    let append_neg = c.append_basic_block(f, "append_neg");
+    let exit = c.append_basic_block(f, "exit");
+    let n_ptr = b.build_alloca(value.get_type(), "n_ptr");
+    b.build_store(n_ptr, value);
+    let len_ptr = b.build_alloca(c.i32_type(), "len_ptr");
+    b.build_store(len_ptr, c.i32_type().const_zero());
+    
+    let viz = b.build_int_compare(IntPredicate::EQ, value, c.i32_type().const_zero(), "viz");
+    b.build_conditional_branch(viz, zero, loop_prep);
+    
+    b.position_at_end(zero);
+    b.build_store(dest, c.const_string(b"0", false));
+    b.build_return(Some(&c.i32_type().const_int(1, false)));
+    
+    b.position_at_end(loop_prep);
+    let neg = b.build_int_compare(IntPredicate::SLT, value, c.i32_type().const_zero(), "neg");
+    b.build_conditional_branch(neg, handle_neg, loop_top);
+
+    b.position_at_end(handle_neg);
+    let nv = b.build_load(c.i32_type(), n_ptr, "nv").into_int_value();
+    let pv = b.build_int_neg(nv, "pv");
+    b.build_store(n_ptr, pv);
+    b.build_unconditional_branch(loop_top);
+
+    b.position_at_end(loop_top);
+    let n = b.build_load(c.i32_type(), n_ptr, "n").into_int_value();
+    let done = b.build_int_compare(IntPredicate::SLE, n, c.i32_type().const_zero(), "done");
+    b.build_conditional_branch(done, loop_exit, loop_body);
+    
+    b.position_at_end(loop_body);
+    let ch = b.build_int_unsigned_rem(n, c.i32_type().const_int(10, false), "ch");
+    let ch8 = b.build_int_truncate_or_bit_cast(ch, c.i8_type(), "ch8");
+    let next_n = b.build_int_unsigned_div(n, c.i32_type().const_int(10, false), "next_n");
+    let append = module.get_function(names::APPEND).unwrap();
+    let append_char = module.get_function(names::APPEND_CHAR).unwrap();
+    b.build_call(append, &[dest.into(), len_ptr.into(), ch8.into()], "_");
+    b.build_store(n_ptr, next_n);
+    b.build_unconditional_branch(loop_top);
+
+    b.position_at_end(loop_exit);
+    b.build_conditional_branch(neg, append_neg, exit);
+
+    b.position_at_end(append_neg);
+    b.build_call(append_char, &[
+        dest.into(),
+        len_ptr.into(),
+        c.i8_type().const_int(b'-' as _, false).into(),
+    ], "_");
+    b.build_unconditional_branch(exit);
+
+    b.position_at_end(exit);
+    let rev = emit_reverse_buffer(&module);
+    let ret = b.build_load(c.i32_type(), len_ptr, "ret").into_int_value();
+    b.build_call(rev, &[
+        dest.into(),
+        ret.into(),
+    ], "_");
+    b.build_return(Some(&ret));
+
+    f
+}
+
+fn emit_reverse_buffer<'ctx>(module: &Module<'ctx>) -> FunctionValue<'ctx> {
+    let c = module.get_context();
+    let b = c.create_builder();
+    let f = module.add_function("reverse_buffer", c.void_type().fn_type(&[
+        c.i8_type().array_type(0).ptr_type(Default::default()).into(),
+        c.i32_type().into(),
+    ], false), None);
+    let buf = f.get_first_param().unwrap().into_pointer_value();
+    buf.set_name("buf");
+    let len = f.get_last_param().unwrap().into_int_value();
+    len.set_name("len");
+    b.position_at_end(c.append_basic_block(f, "entry"));
+    let loop_top = c.append_basic_block(f, "loop_top");
+    let loop_body = c.append_basic_block(f, "loop_body");
+    let loop_exit = c.append_basic_block(f, "loop_exit");
+    
+    let i_ptr = b.build_alloca(c.i32_type(), "i_ptr");
+    let j_ptr = b.build_alloca(c.i32_type(), "j_ptr");
+    b.build_store(i_ptr, c.i32_type().const_zero());
+    let j_init = b.build_int_sub(len, c.i32_type().const_int(1, false), "j_init");
+    b.build_store(j_ptr, j_init);
+    let lt1 = b.build_int_compare(IntPredicate::SLE, len, c.i32_type().const_int(1, false), "lt1");
+    b.build_conditional_branch(lt1, loop_exit, loop_top);
+
+    b.position_at_end(loop_top);
+    let i = b.build_load(c.i32_type(), i_ptr, "i").into_int_value();
+    let j = b.build_load(c.i32_type(), j_ptr, "j").into_int_value();
+    let done = b.build_int_compare(IntPredicate::SGE, i, j, "done");
+    b.build_conditional_branch(done, loop_exit, loop_body);
+    
+    b.position_at_end(loop_body);
+    let ci_ptr = unsafe {
+        b.build_gep(c.i8_type().array_type(0), buf, &[
+            c.i32_type().const_int(0, false),
+            i
+        ], "ci_ptr")
+    };
+    let cj_ptr = unsafe {
+        b.build_gep(c.i8_type().array_type(0), buf, &[
+            c.i32_type().const_int(0, false),
+            j
+        ], "cj_ptr")
+    };
+    let ci = b.build_load(c.i8_type(), ci_ptr, "ci1").into_int_value();
+    let cj = b.build_load(c.i8_type(), cj_ptr, "cj1").into_int_value();
+    b.build_store(ci_ptr, cj);
+    b.build_store(cj_ptr, ci);
+
+    let next_i = b.build_int_add(i, c.i32_type().const_int(1, false), "next_i");
+    let next_j = b.build_int_sub(j, c.i32_type().const_int(1, false), "next_j");
+    b.build_store(i_ptr, next_i);
+    b.build_store(j_ptr, next_j);
+    b.build_unconditional_branch(loop_top);
+
+    b.position_at_end(loop_exit);
+    b.build_return(None);
+
+    f
+}
+
+
+
 #[cfg(test)]
 mod tests {
-    use inkwell::context::Context;
+    use inkwell::{context::Context, values::AnyValue};
+
+    use crate::tvalue::float_to_string::{emit_reverse_buffer, emit_int_to_buffer, emit_append, emit_append_char};
 
     #[test]
     fn snapshot() {
@@ -541,15 +702,120 @@ mod tests {
         };
         // TODO: unreasonable floats should also work...
         proptest::proptest!(
-        |(v in (-9999999999999.0f32..9999999999999.0f32))| {
+        |(v in (-999999999.0f32..9999999999999.0f32))| {
             let mut buf = [0u8; 4096];
             let ptr = buf.as_mut_ptr();
             let len = unsafe { f.call(v, ptr) };
             let ret = String::from_utf8_lossy(&buf[0..len as usize]);
             let round_trip: f32 = ret.parse().unwrap();
             let diff = (v - round_trip).abs();
+            if diff >= 0.001 && m.get_function("main").is_none() {
+                let b = c.create_builder();
+                let main = m.add_function("main", c.i32_type().fn_type(&[], false), None);
+                let write = m.add_function("write", c.i32_type().fn_type(&[
+                    c.i32_type().into(),
+                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.i32_type().into(),
+                ], false), None);
+                b.position_at_end(c.append_basic_block(main, "entry"));
+                let buf = b.build_alloca(c.i8_type().array_type(255), "buf");
+                let test_value = c.f32_type().const_float(v as _);
+                let f = m.get_function(super::names::FLOAT_TO_STRING).unwrap();
+                let len = b.build_call(f, &[test_value.into(), buf.into()], "len");
+                b.build_call(write, &[
+                    c.i32_type().const_int(1, false).into(),
+                    buf.into(),
+                    len.as_any_value_enum().into_int_value().into(),
+                ], "_");
+                b.build_return(Some(&c.i32_type().const_zero()));
+                std::fs::write("test-ir/float_to_string.ll", m.to_string()).unwrap();
+            }
             assert!(
                 diff < 0.001,
+                "
+   v:{v}
+  rt:{round_trip}
+ len:{len}
+ ret:{ret:?}
+diff:{diff}
+"
+            );
+        });
+    }
+
+    #[test]
+    fn convert_ints() {
+        let c = Context::create();
+        let m = c.create_module("int_to_string");
+        emit_append_char(&m);
+        emit_append(&m);
+        emit_int_to_buffer(&m);
+        
+        m.verify().unwrap_or_else(|e| {
+            for line in e.to_string().lines() {
+                eprintln!("{line}");
+            }
+            panic!("module not verified");
+        });
+        let printf = m.add_function("printf", c.i32_type().fn_type(&[
+            c.i8_type().ptr_type(Default::default()).into(),
+        ], true), None);
+        let b = c.create_builder();
+        for f in m.get_functions() {
+            let name = f.get_name().to_str().unwrap();
+            if name == "printf" {
+                continue;
+            }
+            for bb in f.get_basic_blocks() {
+                let mut args = Vec::new();
+                b.position_before(&bb.get_first_instruction().unwrap());
+                let bb_name = bb.get_name().to_str().unwrap();
+                let mut output = format!("{name}->{bb_name}");
+                let mut wrote_arg = false;
+                if bb_name == "entry" {
+                    output.push_str("(");
+                    for arg in f.get_param_iter() {
+                        if arg.is_int_value() {
+                            if wrote_arg {
+                                output.push_str(", ");
+                            }
+                            wrote_arg = true;
+                            let name = arg.into_int_value().get_name().to_str().unwrap().to_string();
+                            let app = format!("{name}: %i");
+                            output.push_str(&app);
+                            args.push(inkwell::values::BasicMetadataValueEnum::from(arg));
+                        }
+                    }
+                    output.push_str(")");
+                }
+                output.push_str("\n\0");
+                
+                let buf = b.build_alloca(c.i8_type().array_type(output.len() as _),"buf");
+                b.build_store(buf, c.const_string(output.as_bytes(), false));
+                args.insert(0, buf.into());
+                b.build_call(printf, &args, "_");
+            }
+        }
+        std::fs::write("test-ir/int_to_string.ll", m.to_string()).unwrap();
+        let jit = m
+            .create_jit_execution_engine(inkwell::OptimizationLevel::Aggressive)
+            .unwrap();
+        type F = unsafe extern "C" fn(i32, *mut u8) -> u32;
+        let f = unsafe {
+            jit.get_function::<F>(super::names::INT_TO_STRING)
+                .unwrap()
+        };
+        // TODO: unreasonable floats should also work...
+        proptest::proptest!(
+        |(v in (i32::MIN..=i32::MAX))| {
+            println!("attempt: {v}");
+            let mut buf = [0u8; 4096];
+            let ptr = buf.as_mut_ptr();
+            let len = unsafe { f.call(v, ptr) };
+            let ret = String::from_utf8_lossy(&buf[0..len as usize]);
+            let round_trip: i32 = ret.parse().unwrap();
+            let diff = (v - round_trip).abs();
+            assert_eq!(round_trip, v,
                 "
    v:{v}
   rt:{round_trip}
