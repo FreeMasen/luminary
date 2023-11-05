@@ -1,4 +1,8 @@
+<div class="oranda-hide">
+
 # Luminary
+
+</div>
 
 ![an animated luminary](./Luminary%20Logo.svg)
 
