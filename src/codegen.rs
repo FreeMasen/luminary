@@ -1,88 +1,110 @@
+use analisar::ast::BinaryOperator;
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
     context::ContextRef,
     module::Module,
-    types::{FloatType, IntType, StructType, VoidType},
+    types::{FloatType, IntType, VoidType},
     values::{AnyValue, ArrayValue, FloatValue, FunctionValue, IntValue, PointerValue},
 };
-
-use crate::tvalue::tvalue_names;
 
 pub struct CodeGenerator<'ctx> {
     context: ContextRef<'ctx>,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    structs: ExpectedStructs<'ctx>,
     ctors: ExpectedCtors<'ctx>,
     helpers: ExpectedHelpers<'ctx>,
-}
-
-struct ExpectedStructs<'ctx> {
-    base: StructType<'ctx>,
-    #[allow(unused)]
-    bool: StructType<'ctx>,
-    #[allow(unused)]
-    number: StructType<'ctx>,
-    string: StructType<'ctx>,
 }
 
 struct ExpectedCtors<'ctx> {
     nil: FunctionValue<'ctx>,
     bool: FunctionValue<'ctx>,
-    number: FunctionValue<'ctx>,
-    string: FunctionValue<'ctx>,
+    int: FunctionValue<'ctx>,
+    float: FunctionValue<'ctx>,
+    string_const: FunctionValue<'ctx>,
 }
 
 struct ExpectedHelpers<'ctx> {
     print: FunctionValue<'ctx>,
-}
-
-impl<'ctx> ExpectedStructs<'ctx> {
-    pub fn new(module: &Module<'ctx>) -> Self {
-        Self {
-            base: module
-                .get_struct_type(tvalue_names::types::BASE)
-                .expect(tvalue_names::types::BASE),
-            bool: module
-                .get_struct_type(tvalue_names::types::BOOL)
-                .expect(tvalue_names::types::BOOL),
-            number: module
-                .get_struct_type(tvalue_names::types::NUMBER)
-                .expect(tvalue_names::types::NUMBER),
-            string: module
-                .get_struct_type(tvalue_names::types::STRING)
-                .expect(tvalue_names::types::STRING),
-        }
-    }
+    tvalue_size: FunctionValue<'ctx>,
 }
 
 impl<'ctx> ExpectedCtors<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
+        let c = module.get_context();
+        let nil = module.add_function(
+            runtime::INIT,
+            c.void_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+            None,
+        );
+        let bool = module.add_function(
+            runtime::INIT_BOOL,
+            c.void_type().fn_type(
+                &[
+                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.bool_type().into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        let int = module.add_function(
+            runtime::INIT_INT,
+            c.void_type().fn_type(
+                &[
+                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.i64_type().into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        let float = module.add_function(
+            runtime::INIT_FLOAT,
+            c.void_type().fn_type(
+                &[
+                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.f64_type().into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        let string_const = module.add_function(
+            runtime::INIT_STR,
+            c.void_type().fn_type(
+                &[
+                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.i32_type().into(),
+                    c.i8_type().ptr_type(Default::default()).into(),
+                ],
+                false,
+            ),
+            None,
+        );
         Self {
-            nil: module
-                .get_function(tvalue_names::ctors::NIL)
-                .expect(tvalue_names::ctors::NIL),
-            bool: module
-                .get_function(tvalue_names::ctors::BOOL)
-                .expect(tvalue_names::ctors::BOOL),
-            number: module
-                .get_function(tvalue_names::ctors::NUMBER)
-                .expect(tvalue_names::ctors::NUMBER),
-            string: module
-                .get_function(tvalue_names::ctors::STRING)
-                .expect(tvalue_names::ctors::STRING),
+            nil,
+            bool,
+            int,
+            float,
+            string_const,
         }
     }
 }
 
 impl<'ctx> ExpectedHelpers<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
-        Self {
-            print: module
-                .get_function(tvalue_names::print_names::PRINT_TVALUE)
-                .expect(tvalue_names::print_names::PRINT_TVALUE),
-        }
+        let c = module.get_context();
+        let print = module.add_function(
+            runtime::TO_STRING,
+            c.void_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+            None,
+        );
+        let tvalue_size =
+            module.add_function(runtime::SIZE, c.i32_type().fn_type(&[], false), None);
+        Self { print, tvalue_size }
     }
 }
 
@@ -90,14 +112,38 @@ impl<'ctx> CodeGenerator<'ctx> {
     pub fn new(module: Module<'ctx>) -> Self {
         let context = module.get_context();
         let builder = context.create_builder();
-        let structs = ExpectedStructs::new(&module);
         let ctors = ExpectedCtors::new(&module);
         let helpers = ExpectedHelpers::new(&module);
+        for name in &[
+            runtime::math::ADD,
+            runtime::math::SUB,
+            runtime::math::MUL,
+            runtime::math::DIV,
+            runtime::math::FLOOR_DIV,
+            runtime::math::POW,
+            runtime::math::REM,
+            runtime::math::BIN_AND,
+            runtime::math::BIN_OR,
+            runtime::math::BIN_RHS,
+            runtime::math::BIN_LHS,
+        ] {
+            module.add_function(
+                name,
+                context.void_type().fn_type(
+                    &[
+                        context.i8_type().ptr_type(Default::default()).into(),
+                        context.i8_type().ptr_type(Default::default()).into(),
+                        context.i8_type().ptr_type(Default::default()).into(),
+                    ],
+                    false,
+                ),
+                None,
+            );
+        }
         Self {
             context,
             module,
             builder,
-            structs,
             ctors,
             helpers,
         }
@@ -123,12 +169,24 @@ impl<'ctx> CodeGenerator<'ctx> {
         self.context.void_type()
     }
 
+    pub fn i8_type(&self) -> IntType<'ctx> {
+        self.context.i8_type()
+    }
+
     pub fn i32_type(&self) -> IntType<'ctx> {
         self.context.i32_type()
     }
 
+    pub fn i64_type(&self) -> IntType<'ctx> {
+        self.context.i64_type()
+    }
+
     pub fn f32_type(&self) -> FloatType<'ctx> {
         self.context.f32_type()
+    }
+
+    pub fn f64_type(&self) -> FloatType<'ctx> {
+        self.context.f64_type()
     }
 
     pub fn bool_type(&self) -> IntType<'ctx> {
@@ -140,7 +198,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     pub fn const_u8(&self, value: u8) -> IntValue<'ctx> {
-        self.context.i8_type().const_int(value as _, false)
+        self.i8_type().const_int(value as _, false)
     }
 
     pub fn const_i32(&self, value: i32) -> IntValue<'ctx> {
@@ -149,8 +207,18 @@ impl<'ctx> CodeGenerator<'ctx> {
         self.i32_type().const_int(casted as _, true)
     }
 
+    pub fn const_i64(&self, value: i64) -> IntValue<'ctx> {
+        let be_bytes = value.to_be_bytes();
+        let casted = u64::from_be_bytes(be_bytes);
+        self.i64_type().const_int(casted as _, true)
+    }
+
     pub fn const_f32(&self, value: f32) -> FloatValue<'ctx> {
         self.f32_type().const_float(value as _)
+    }
+
+    pub fn const_f64(&self, value: f64) -> FloatValue<'ctx> {
+        self.f64_type().const_float(value as _)
     }
 
     pub fn const_bool(&self, value: bool) -> IntValue<'ctx> {
@@ -169,54 +237,62 @@ impl<'ctx> CodeGenerator<'ctx> {
         self.builder.position_at_end(bb)
     }
 
+    /// Generate code that will emit a single alloca for the tvalue base type setting all values
+    /// to their defaults (all 0)
+    pub fn alloca_tvalue(&self, name: &str) -> PointerValue<'ctx> {
+        let size = self
+            .builder
+            .build_call(self.helpers.tvalue_size, &[], "size")
+            .as_any_value_enum()
+            .into_int_value();
+        let ptr = self.builder.build_array_alloca(self.i8_type(), size, name);
+        self.builder.build_call(self.ctors.nil, &[ptr.into()], "_");
+        ptr
+    }
+
+    pub fn alloca_str(&self, value: &[u8], name: &str) -> PointerValue<'ctx> {
+        let ptr = self.builder.build_array_alloca(
+            self.i8_type(),
+            self.const_i32(value.len() as i32),
+            name,
+        );
+        let value = self.const_string(value);
+        self.builder.build_store(ptr, value);
+        ptr
+    }
+
     pub fn init_tvalue_bool(&self, value: bool, name: &str) -> PointerValue<'ctx> {
-        let alloca = self.builder.build_alloca(self.structs.base, name);
+        let alloca = self.alloca_tvalue(name);
         let init = self.const_bool(value);
         self.builder
             .build_call(self.ctors.bool, &[alloca.into(), init.into()], "_");
         alloca
     }
 
-    /// Generate code that will emit a single alloca for the tvalue base type setting all values
-    /// to their defaults (all 0)
-    pub fn alloca_tvalue(&self, name: &str) -> PointerValue<'ctx> {
-        let ptr = self.builder.build_alloca(self.structs.base, name);
-        self.builder.build_call(self.ctors.nil, &[ptr.into()], "_");
-        ptr
-    }
-
     /// Generate code
-    pub fn init_tvalue_num(&self, value: f32, name: &str) -> PointerValue<'ctx> {
+    pub fn init_tvalue_num(&self, value: f64, name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
-        let init = self.const_f32(value);
-        self.builder
-            .build_call(self.ctors.number, &[alloca.into(), init.into()], "_");
+        if value == value.abs() {
+            let init = self.const_i64(value as i64);
+            self.builder
+                .build_call(self.ctors.int, &[alloca.into(), init.into()], "_");
+        } else {
+            let init = self.const_f64(value);
+            self.builder
+                .build_call(self.ctors.float, &[alloca.into(), init.into()], "_");
+        }
         alloca
     }
 
     pub fn init_tvalue_string(&self, value: &[u8], name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let capacity = self.const_u32(value.len() as _);
-        let init = self.const_string(value);
-        self.builder
-            .build_call(self.ctors.string, &[alloca.into(), capacity.into()], "_");
-        if !value.is_empty() {
-            let ptr_ptr = self
-                .builder
-                .build_struct_gep(self.structs.string, alloca, 4, "ptr_ptr")
-                .expect("string buffer at index 4");
-            let ptr = self
-                .builder
-                .build_load(self.i32_type().ptr_type(Default::default()), ptr_ptr, "ptr")
-                .into_pointer_value();
-            self.builder.build_store(ptr, init);
-            let len_prt = self
-                .builder
-                .build_struct_gep(self.structs.string, alloca, 1, "len_prt")
-                .expect("string length at index 1");
-            self.builder
-                .build_store(len_prt, self.const_u32(value.len() as _));
-        }
+        let ptr = self.alloca_str(value, &format!("{name}init"));
+        self.builder.build_call(
+            self.ctors.string_const,
+            &[alloca.into(), capacity.into(), ptr.into()],
+            "_",
+        );
         alloca
     }
 
@@ -250,19 +326,44 @@ impl<'ctx> CodeGenerator<'ctx> {
         lhs: PointerValue<'ctx>,
         rhs: PointerValue<'ctx>,
         dest: PointerValue<'ctx>,
-    ) -> IntValue<'ctx> {
+    ) {
         let op_fn = self
             .module
             .get_function(op_name)
             .unwrap_or_else(|| panic!("{op_name} is not a function in this module"));
         self.builder
-            .build_call(op_fn, &[lhs.into(), rhs.into(), dest.into()], success_name)
-            .as_any_value_enum()
-            .into_int_value()
+            .build_call(op_fn, &[lhs.into(), rhs.into(), dest.into()], success_name);
     }
 
     pub fn perform_print(&self, value: PointerValue<'ctx>) {
         self.builder
             .build_call(self.helpers.print, &[value.into()], "_");
+    }
+
+    pub fn binary_op_name(op: BinaryOperator) -> &'static str {
+        use BinaryOperator::*;
+        match op {
+            Add => runtime::math::ADD,
+            Subtract => runtime::math::SUB,
+            Multiply => runtime::math::MUL,
+            Divide => runtime::math::DIV,
+            FloorDivide => runtime::math::FLOOR_DIV,
+            Power => runtime::math::POW,
+            Modulo => runtime::math::REM,
+            BitwiseAnd => runtime::math::BIN_AND,
+            BitwiseXor => runtime::math::BIN_XOR,
+            BitwiseOr => runtime::math::BIN_OR,
+            RightShift => runtime::math::BIN_RHS,
+            LeftShift => runtime::math::BIN_LHS,
+            Concatenate => todo!(),
+            GreaterThan => todo!(),
+            GreaterThanEqual => todo!(),
+            LessThan => todo!(),
+            LessThanEqual => todo!(),
+            Equal => todo!(),
+            NotEqual => todo!(),
+            And => todo!(),
+            Or => todo!(),
+        }
     }
 }

@@ -1,24 +1,35 @@
 [package]
 name = "luminary"
-version = "0.1.0-pre1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 repository = "https://github.com/FreeMasen/luminary"
 
 [dependencies]
 analisar = "0.2"
 clap = { version = "4.4", features = [ "derive" ] }
+escargot = "0.5"
 inkwell = { version = "0.2", features = ["llvm16-0"] }
 lex_lua = "0.1.9"
+runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features = ["names"]}
 tempfile = "3.8"
 
 [dev-dependencies]
 insta = "1.31"
 proptest = "1.2"
+serde_json = "1"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0-pre1"
+edition = "2021"
+publish = true
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]
