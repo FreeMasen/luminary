@@ -97,7 +97,7 @@ impl<'ctx> ExpectedHelpers<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
         let c = module.get_context();
         let print = module.add_function(
-            runtime::TO_STRING,
+            runtime::PRINTLN,
             c.void_type()
                 .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
             None,

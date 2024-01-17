@@ -228,19 +228,17 @@ impl PartialEq for StringConst {
 }
 
 #[runtime_macros::std_tvalue_export]
-pub unsafe extern "C" fn size(ptr: *mut TValue) {
-    ptr.as_mut().map(|v| *v = TValue::new_nil());
+pub unsafe extern "C" fn size() -> u32 {
+    core::mem::size_of::<TValue>() as _
 }
 
 #[runtime_macros::std_tvalue_export]
-pub unsafe extern "C" fn to_string(ptr: *const TValue, dest: *mut TValue) {
-    let dest = get_mut_or_return!(dest);
-    let value = get_or_return!(ptr, dest);
-    if dest.tag != tags::STRING_CONST {
-        *dest = TValue::new_bool(false);
+pub unsafe extern "C" fn println(ptr: *const TValue) {
+    let Some(val) = ptr.as_ref() else {
+        println!();
         return;
-    }
-    // let formatted = alloc::format!("{value}");
+    };
+    println!("{val}");
 }
 
 #[runtime_macros::std_tvalue_export]

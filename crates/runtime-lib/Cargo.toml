@@ -13,10 +13,12 @@ mlua = { version = "0.9", features = ["lua53", "vendored"]}
 proptest = "1.4"
 
 [lib]
-crate-type = ["rlib", "staticlib"]
+crate-type = ["rlib", "staticlib", "cdylib"]
+# crate-type = ["staticlib"]
 
 [profile.release]
-panic = "abort"
+# panic = "abort"
+lto = "fat"
 
 [profile.dev]
 panic = "abort"
