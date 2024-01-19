@@ -20,7 +20,7 @@ jobs:
         cargo clean &&
         cargo rustc --release -p luminary-runtime
         --features runtime --crate-type staticlib --lib &&
-        echo "{\"staticlib\":\"$(find . -name libluminary_runtime.a)}\"" >> "$GITHUB_OUTPUT"
+        echo "staticlib=$(find . -name libluminary_runtime.a)}" >> "$GITHUB_OUTPUT"
     - name: "Upload artifacts"
       uses: actions/upload-artifact@v3
       with:
