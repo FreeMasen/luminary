@@ -44,9 +44,9 @@ installers = ["shell", "powershell"]
 targets = ["x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Publish jobs to run in CI
 pr-run-mode = "upload"
-# Skip checking whether the specified configuration files are up to date
-allow-dirty = ["ci"]
-# Disable the c runtime static linking for Windows releases, this means that users will need
-# to provide their own crt when running the outputed binary
-# TODO: remove this some day
+# Whether +crt-static should be used on msvc
 msvc-crt-static = false
+# Whether CI should include auto-generated code to build local artifacts
+build-local-artifacts = false
+# Local artifacts jobs to run in CI
+local-artifacts-jobs = ["./local-build-binary"]
