@@ -99,7 +99,7 @@ jobs:
           submodules: recursive
       - name: Install LLVM and Clang (Linux)
         if: runner.os == 'Linux'
-        uses: KyleMayes/install-llvm-action@v1.9.0
+        uses: e@v1.9.0
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
           force-version: true
