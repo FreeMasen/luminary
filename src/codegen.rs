@@ -5,7 +5,7 @@ use inkwell::{
     context::ContextRef,
     module::Module,
     types::{FloatType, IntType, VoidType},
-    values::{AnyValue, ArrayValue, FloatValue, FunctionValue, IntValue, PointerValue},
+    values::{AnyValue, ArrayValue, FloatValue, FunctionValue, IntValue, PointerValue}, attributes::{Attribute, AttributeLoc},
 };
 
 pub struct CodeGenerator<'ctx> {
@@ -31,13 +31,16 @@ struct ExpectedHelpers<'ctx> {
 
 impl<'ctx> ExpectedCtors<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
+        let attr = Attribute::get_named_enum_kind_id("nounwind");
         let c = module.get_context();
+        let attr = c.create_enum_attribute(attr, 0);
         let nil = module.add_function(
             runtime::INIT,
             c.void_type()
                 .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
             None,
         );
+        nil.add_attribute(AttributeLoc::Function, attr);
         let bool = module.add_function(
             runtime::INIT_BOOL,
             c.void_type().fn_type(
@@ -49,6 +52,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
+        bool.add_attribute(AttributeLoc::Function, attr);
         let int = module.add_function(
             runtime::INIT_INT,
             c.void_type().fn_type(
@@ -60,6 +64,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
+        int.add_attribute(AttributeLoc::Function, attr);
         let float = module.add_function(
             runtime::INIT_FLOAT,
             c.void_type().fn_type(
@@ -71,6 +76,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
+        float.add_attribute(AttributeLoc::Function, attr);
         let string_const = module.add_function(
             runtime::INIT_STR,
             c.void_type().fn_type(
@@ -83,6 +89,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
+        string_const.add_attribute(AttributeLoc::Function, attr);
         Self {
             nil,
             bool,
@@ -96,6 +103,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
 impl<'ctx> ExpectedHelpers<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
         let c = module.get_context();
+        let attr = c.create_enum_attribute(Attribute::get_named_enum_kind_id("nounwind"), 0);
         let print = module.add_function(
             runtime::PRINTLN,
             c.void_type()
@@ -104,6 +112,9 @@ impl<'ctx> ExpectedHelpers<'ctx> {
         );
         let tvalue_size =
             module.add_function(runtime::SIZE, c.i32_type().fn_type(&[], false), None);
+        print.add_attribute(AttributeLoc::Function, attr);
+        tvalue_size.add_attribute(AttributeLoc::Function, attr);
+        module.add_function("printf", c.i32_type().fn_type(&[c.i8_type().ptr_type(Default::default()).into()], true), None);
         Self { print, tvalue_size }
     }
 }
@@ -114,6 +125,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         let builder = context.create_builder();
         let ctors = ExpectedCtors::new(&module);
         let helpers = ExpectedHelpers::new(&module);
+        let attr = context.create_enum_attribute(Attribute::get_named_enum_kind_id("nounwind"), 0);
         for name in &[
             runtime::math::ADD,
             runtime::math::SUB,
@@ -127,7 +139,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             runtime::math::BIN_RHS,
             runtime::math::BIN_LHS,
         ] {
-            module.add_function(
+            let f = module.add_function(
                 name,
                 context.void_type().fn_type(
                     &[
@@ -139,6 +151,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 ),
                 None,
             );
+            f.add_attribute(AttributeLoc::Function, attr);
         }
         Self {
             context,
@@ -153,8 +166,19 @@ impl<'ctx> CodeGenerator<'ctx> {
         let f = self
             .module
             .add_function("main", self.void_type().fn_type(&[], false), None);
+        
         let bb = self.context.append_basic_block(f, "entry");
         self.position_at_end(bb);
+        self.apply_attrs_to_main(&f);
+    }
+
+    fn apply_attrs_to_main<'a>(&self, f: &FunctionValue<'a>) {
+        for name in ["noinline", "nounwind", "optnone", "uwtable"].into_iter() {
+            let attr = Attribute::get_named_enum_kind_id(name);
+            let attr = self.context.create_enum_attribute(attr, 1);
+            f.add_attribute(AttributeLoc::Function, attr)
+        }
+        
     }
 
     pub fn into_module(self) -> Module<'ctx> {

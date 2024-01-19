@@ -3,7 +3,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Stdout, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 use clap::{Parser, ValueEnum};
@@ -26,8 +26,8 @@ struct Args {
     filetype: FileType,
     #[arg(long, short = 'O', default_value_t = 0)]
     opt: u8,
-    #[arg(long, default_value_t = false)]
-    dynamic_link_runtime: bool,
+    #[arg(long, short)]
+    runtime_location: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -72,7 +72,7 @@ fn main() {
         output,
         filetype,
         opt,
-        dynamic_link_runtime,
+        runtime_location,
     } = Args::parse();
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
@@ -117,7 +117,7 @@ fn main() {
                 let tmp2 = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
                 (tmp2.path().to_owned(), Some(tmp2))
             };
-            link_exe(tmp_o.path(), &dest);
+            link_exe(tmp_o.path(), &dest, runtime_location.as_ref());
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
@@ -133,111 +133,48 @@ fn main() {
     }
 }
 
-fn build_tvalue_lib(file_suffix: &str) -> PathBuf {
-    let msgs = escargot::CargoBuild::default()
-        .package("luminary-runtime")
-        .features("runtime")
-        .release()
-        .exec()
-        .unwrap();
-    for msg in msgs {
-        use escargot::format::Message::*;
-        let msg = msg.unwrap();
-        match msg.decode().unwrap() {
-            CompilerArtifact(artifact) => {
-                if artifact.target.name != "luminary-runtime" {
-                    continue;
-                }
-                return artifact.filenames.iter().find(|p| p.extension().map(|ext| ext == file_suffix).unwrap_or(false)).expect("Unable to find runtime library path").to_path_buf()
-            }
-            _ => (),
-        }
-    }
-    panic!()
-}
-
-#[cfg(target_os = "linux")]
-fn link_exe(obj_path: &Path, dest: &PathBuf) {
-    // let mut cmd = Command::new("mold");
-    let mut cmd = Command::new("ld");
-    // cmd.arg("ld");
-    // let runtime_path = build_tvalue_lib("a");
-    // let tmp = tempfile::Builder::default().prefix("luminary-runtime").tempdir().unwrap();
-    // let file_name = runtime_path.file_name().expect("runtime path file-name");
-    // let file_stem = runtime_path.file_stem().expect("runtime path file-stem");
-    // std::fs::copy(&runtime_path, tmp.path().join(file_name)).unwrap();
-    cmd.arg(obj_path)
-        .arg("--verbose")
-        .arg("/lib/x86_64-linux-gnu/Scrt1.o")
-        .arg("-o")
-        .arg(dest)
-        .arg("-pie")
-        .arg("-z")
-        .arg("relro")
-        .arg("--hash-style=gnu")
-        .arg("--build-id")
-        .arg("--eh-frame-hdr")
-        // .arg("-L")
-        // .arg(tmp.path())
-        // .arg("-l")
-        // .arg(
-        //     file_stem.to_str().unwrap().trim_start_matches("lib"),
-        // )
-        .arg("-L/home/rfm/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib")
-        .arg("-lstd-b149a04e58514815")
-        .arg("-L/home/rfm/projects/luminary/lib")
-        .arg("-lluminary_runtime")
-        .arg("-m")
-        .arg("elf_x86_64")
-        .arg("-dynamic-linker")
-        .arg("/lib64/ld-linux-x86-64.so.2")
-        .arg("-L")
-        .arg("/usr/lib/x86_64-linux-gnu")
-        .arg("-l")
-        .arg("m")
-        .arg("-l")
-        .arg("c");
-    let child = dbg!(cmd).spawn().unwrap();
-    let ld_outout = child.wait_with_output().unwrap();
-    if !ld_outout.status.success() {
-        println!("LDOUT: {}", String::from_utf8_lossy(&ld_outout.stdout));
-        eprintln!("LDERR: {}", String::from_utf8_lossy(&ld_outout.stderr));
-        std::process::exit(1);
-    } else if !ld_outout.stdout.is_empty() {
-        println!("{}", String::from_utf8_lossy(&ld_outout.stdout));
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn link_exe(obj_path: &Path, dest: &PathBuf) {
-    let runtime_path = build_tvalue_lib("a");
-    let tmp = tempfile::Builder::default().prefix("luminary-runtime").tempdir().unwrap();
-    let file_name = runtime_path.file_name().expect("runtime path file-name");
-    let file_stem = runtime_path.file_stem().expect("runtime path file-stem");
-    std::fs::copy(&runtime_path, tmp.path().join(file_name)).unwrap();
-    let mut cmd = Command::new("clang++");
-    cmd.arg("-o").arg(dest);
-    if std::env::var("LUMINARY_USE_VERBOSE_CLANG")
+fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>) {
+    let mut cmd = Command::new("clang");
+    cmd.arg(obj_path).arg("-o").arg(dest).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let clang_verbose = std::env::var("LUMINARY_USE_VERBOSE_CLANG")
         .map(|s| !s.is_empty() && s != "0")
-        .unwrap_or(false)
+        .unwrap_or(false);
+    if clang_verbose
     {
         cmd.arg("--verbose");
     }
-    cmd.
-        arg("-lm")
-        .arg("-L")
-        .arg(tmp.path())
-        .arg("-l")
-        .arg(
-            file_stem.to_str().unwrap().trim_start_matches("lib"),
-        )
-        
-        .arg(obj_path);
+    if let Some(runtime_path) = runtime_path {
+        let runtime_path = runtime_path.canonicalize().expect("valid runtime path");
+        cmd.arg(format!("-L{}", runtime_path.display()));
+    }
+    cmd
+        .arg("-lm")
+        .arg("-lluminary_runtime");
     let child = cmd.spawn().unwrap();
     let clang_outout = child.wait_with_output().unwrap();
     if !clang_outout.status.success() {
-        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
-        eprintln!("{}", String::from_utf8_lossy(&clang_outout.stderr));
+        eprint!("clang");
+        for arg in cmd.get_args() {
+            eprint!(" {}", arg.to_str().unwrap())
+        }
+        eprintln!("");
+        eprintln!("linking with clang failed with the following output:");
+        std::fs::copy(obj_path, "failed-link.o").ok();
+
+        let stdout = String::from_utf8_lossy(&clang_outout.stdout);
+        let stderr = String::from_utf8_lossy(&clang_outout.stderr);
+        if !stdout.is_empty() {
+            eprintln!("{stdout}", );
+        }
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+        if !clang_verbose {
+            eprintln!("NOTE: set LUMINARY_USE_VERBOSE_CLANG=1 for more details");
+        }
+        if runtime_path.is_none() {
+            eprintln!("HINT: setting the argument --runtime-location to the directory containing libluminary_runtime.a|o might help");
+        }
         std::process::exit(1);
     } else {
         println!("{}", String::from_utf8_lossy(&clang_outout.stdout));

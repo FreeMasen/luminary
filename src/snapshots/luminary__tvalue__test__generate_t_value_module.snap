@@ -13,7 +13,7 @@ source_filename = "std::tvalue"
 ; Function Attrs: nounwind
 declare ptr @malloc(i32) #0
 
-define void @"std::tvalue::new_nil"(ptr %0) {
+define void @"std::tvalue::new_nil"(ptr sret(%"std::tvalue::TValue") %0) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
   store i8 0, ptr %tag_ptr, align 1
@@ -22,7 +22,7 @@ entry:
   ret void
 }
 
-define void @"std::tvalue::new_bool"(ptr %0, i1 %1) {
+define void @"std::tvalue::new_bool"(ptr sret(%"std::tvalue::TValue") %0, i1 %1) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
   store i8 1, ptr %tag_ptr, align 1
@@ -31,7 +31,7 @@ entry:
   ret void
 }
 
-define void @"std::tvalue::new_num"(ptr %0, float %1) {
+define void @"std::tvalue::new_num"(ptr sret(%"std::tvalue::TValue") %0, float %1) {
 entry:
   %tag_ptr = getelementptr inbounds %"std::tvalue::TValue", ptr %0, i32 0, i32 0
   store i8 2, ptr %tag_ptr, align 1
@@ -231,7 +231,7 @@ rhs_ian:                                          ; preds = %lhs_ian
   ret i1 true
 }
 
-define i1 @"std::tvalue::add"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::add"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -247,7 +247,7 @@ nan:                                              ; preds = %entry
   ret i1 false
 }
 
-define i1 @"std::tvalue::sub"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::sub"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -263,7 +263,7 @@ nan:                                              ; preds = %entry
   ret i1 false
 }
 
-define i1 @"std::tvalue::mul"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::mul"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -279,7 +279,7 @@ nan:                                              ; preds = %entry
   ret i1 false
 }
 
-define i1 @"std::tvalue::div"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::div"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -298,7 +298,7 @@ nan:                                              ; preds = %entry
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare float @llvm.floor.f32(float) #1
 
-define i1 @"std::tvalue::floor_div"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::floor_div"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -318,7 +318,7 @@ nan:                                              ; preds = %entry
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare float @llvm.pow.f32(float, float) #1
 
-define i1 @"std::tvalue::pow"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::pow"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -334,7 +334,7 @@ nan:                                              ; preds = %entry
   ret i1 false
 }
 
-define i1 @"std::tvalue::mod"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::mod"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -394,7 +394,30 @@ nai:                                              ; preds = %lhs_iai, %entry
   ret i1 false
 }
 
-define i1 @"std::tvalue::bin_and"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::is_str"(ptr %0) {
+entry:
+  %kind = call i8 @"std::tvalue::get_tag"(ptr %0)
+  %is_str = icmp eq i8 %kind, 3
+  ret i1 %is_str
+}
+
+define i1 @"std::tvalue::is_two_strs"(ptr %lhs, ptr %rhs) {
+entry:
+  %lhs_is = call i1 @"std::tvalue::is_str"(ptr %lhs)
+  br i1 %lhs_is, label %lhs_ias, label %nai
+
+lhs_ias:                                          ; preds = %entry
+  %rhs_is = call i1 @"std::tvalue::is_str"(ptr %rhs)
+  br i1 %rhs_is, label %rhs_ias, label %nai
+
+rhs_ias:                                          ; preds = %lhs_ias
+  ret i1 true
+
+nai:                                              ; preds = %lhs_ias, %entry
+  ret i1 false
+}
+
+define i1 @"std::tvalue::bin_and"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -420,7 +443,7 @@ not_ints:                                         ; preds = %ian
   ret i1 false
 }
 
-define i1 @"std::tvalue::bin_or"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::bin_or"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -446,7 +469,7 @@ not_ints:                                         ; preds = %ian
   ret i1 false
 }
 
-define i1 @"std::tvalue::lsh"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::lsh"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -472,7 +495,7 @@ not_ints:                                         ; preds = %ian
   ret i1 false
 }
 
-define i1 @"std::tvalue::rsh"(ptr %lhs, ptr %rhs, ptr %out) {
+define i1 @"std::tvalue::rsh"(ptr %out, ptr %lhs, ptr %rhs) {
 entry:
   %are_nums = call i1 @"std::tvalue::is_two_numbers"(ptr %lhs, ptr %rhs)
   br i1 %are_nums, label %ian, label %nan
@@ -521,9 +544,4 @@ iai:                                              ; preds = %ian
 
 attributes #0 = { nounwind }
 attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
-
-!llvm.dbg.cu = !{!0}
-
-!0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1, producer: "luminary", isOptimized: false, runtimeVersion: 1, emissionKind: FullDebug, splitDebugInlining: false)
-!1 = !DIFile(filename: "std_tvalue.ll", directory: ".")
 

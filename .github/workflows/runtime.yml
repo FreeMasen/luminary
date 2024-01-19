@@ -1,0 +1,47 @@
+name: Release
+
+permissions:
+  contents: write
+  on:
+  push:
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+  pull_request:
+
+jobs:
+  build-ubuntu-static:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: build runtime staticlib
+      id: build-runtime
+      run: >-
+        cargo clean &&
+        cargo rustc --release -p luminary-runtime
+        --features runtime --crate-type staticlib --lib &&
+        "lib=$(find . -name libluminary_runtime.a)" >> "$GITHUB_OUTPUT"
+    - name: "Upload artifacts"
+        uses: actions/upload-artifact@v3
+        with:
+          name: staticlib
+          path: |
+            ${{ steps.build-runtime.outputs.lib }}
+            ${{ env.BUILD_MANIFEST_NAME }}
+  build-ubuntu-static:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: build runtime cdylib
+      id: build-runtime
+      run: >-
+        cargo clean &&
+        cargo rustc --release -p luminary-runtime
+        --features runtime --crate-type cdylib --lib &&
+        "lib=$(find . -name libluminary_runtime.so)" >> "$GITHUB_OUTPUT"
+    - name: "Upload artifacts"
+        uses: actions/upload-artifact@v3
+        with:
+          name: staticlib
+          path: |
+            ${{ steps.build-runtime.outputs.lib }}
+            ${{ env.BUILD_MANIFEST_NAME }}
