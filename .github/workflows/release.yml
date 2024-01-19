@@ -80,11 +80,11 @@ jobs:
           name: artifacts
           path: dist-manifest.json
 
-  custom-local-build-binary.yml:
+  custom-local-build-binary:
     needs:
       - plan
     if: ${{ needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload' }}
-    uses: ./.github/workflows/local-build-binary.yml.yml
+    uses: ./.github/workflows/local-build-binary.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
@@ -93,7 +93,7 @@ jobs:
   build-global-artifacts:
     needs:
       - plan
-      - custom-local-build-binary.yml
+      - custom-local-build-binary
     runs-on: "ubuntu-20.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
