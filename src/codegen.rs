@@ -36,6 +36,7 @@ struct ExpectedCtors<'ctx> {
 
 struct ExpectedHelpers<'ctx> {
     print: FunctionValue<'ctx>,
+    write: FunctionValue<'ctx>,
 }
 
 impl<'ctx> ExpectedStructs<'ctx> {
@@ -82,11 +83,25 @@ impl<'ctx> ExpectedHelpers<'ctx> {
             print: module
                 .get_function(tvalue_names::print_names::PRINT_TVALUE)
                 .expect(tvalue_names::print_names::PRINT_TVALUE),
+            write: module.get_function("write").expect("write"),
         }
     }
 }
 
 impl<'ctx> CodeGenerator<'ctx> {
+    pub fn from_tvalue_module(tvalue_module: &Module<'ctx>, name: &str) -> Self {
+        let context = tvalue_module.get_context();
+        let module = context.create_module(name);
+        for f in tvalue_module.get_functions() {
+            module.add_function(
+                f.get_name().to_str().unwrap(),
+                f.get_type(),
+                Some(f.get_linkage()),
+            );
+        }
+        Self::new(module)
+    }
+
     pub fn new(module: Module<'ctx>) -> Self {
         let context = module.get_context();
         let builder = context.create_builder();
@@ -261,8 +276,50 @@ impl<'ctx> CodeGenerator<'ctx> {
             .into_int_value()
     }
 
-    pub fn perform_print(&self, value: PointerValue<'ctx>) {
+    pub fn perform_print(&self, values: impl Iterator<Item = PointerValue<'ctx>>) {
+        for (i, ptr) in values.enumerate() {
+            self.perform_print_entry(ptr, i > 0)
+        }
+        self.emit_write_str("\n");
+    }
+
+    pub fn perform_print_entry(&self, value: PointerValue<'ctx>, after_first: bool) {
+        if after_first {
+            self.emit_write_str("\t");
+        }
         self.builder
             .build_call(self.helpers.print, &[value.into()], "_");
+    }
+
+    pub fn emit_write_str(&self, s: &str) {
+        let b = self
+            .builder
+            .build_alloca(self.context.i8_type().array_type(s.len() as _), "new_line");
+        self.builder
+            .build_store(b, self.context.const_string(s.as_bytes(), false));
+        self.builder.build_call(
+            self.helpers.write,
+            &[
+                self.const_i32(1).into(),
+                b.into(),
+                self.const_i32(s.len() as _).into(),
+            ],
+            "_",
+        );
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::tvalue::TValueModuleBuilder;
+
+    use super::*;
+
+    #[test]
+    fn try_construct() {
+        let context = inkwell::context::Context::create();
+        let mut tvalue_builder = TValueModuleBuilder::new(&context);
+        let tvalue_module = tvalue_builder.gen_lib();
+        let _generator = CodeGenerator::from_tvalue_module(&tvalue_module, "test");
     }
 }
