@@ -175,7 +175,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     fn apply_attrs_to_main<'a>(&self, f: &FunctionValue<'a>) {
         for name in ["noinline", "nounwind", "optnone", "uwtable"].into_iter() {
             let attr = Attribute::get_named_enum_kind_id(name);
-            let attr = self.context.create_enum_attribute(attr, 1);
+            let attr = self.context.create_enum_attribute(attr, 0);
             f.add_attribute(AttributeLoc::Function, attr)
         }
         
