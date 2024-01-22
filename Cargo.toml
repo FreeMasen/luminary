@@ -8,10 +8,12 @@ description = "A compiler for lua."
 
 [dependencies]
 analisar = "0.2"
-clap = { version = "4.4", features = [ "derive" ] }
+clap = { version = "4.4", features = ["derive"] }
 inkwell = { version = "0.2", features = ["llvm16-0"] }
 lex_lua = "0.1.9"
-runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features = ["names"]}
+runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features = [
+    "names",
+] }
 tempfile = "3.8"
 
 [dev-dependencies]
@@ -41,7 +43,11 @@ ci = ["github"]
 # The installers to generate for each app
 installers = ["shell", "powershell"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
 # Publish jobs to run in CI
 pr-run-mode = "upload"
 # Whether +crt-static should be used on msvc
@@ -54,4 +60,14 @@ precise-builds = true
 
 [[workspace.metadata.dist.extra-artifacts]]
 artifacts = ["target/release/libluminary_runtime.*"]
-buildact = ["cargo", "rustc", "--release", "--features", "runtime", "-p", "luminary-runtime", "--crate-type", "cdylib,staticlib"]
+buildact = [
+    "cargo",
+    "rustc",
+    "--release",
+    "--features",
+    "runtime",
+    "-p",
+    "luminary-runtime",
+    "--crate-type",
+    "cdylib,staticlib",
+]
