@@ -77,12 +77,12 @@ jobs:
           # Actually do builds and make zips and whatnot
           cargo dist build --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "cargo dist ran successfully"
-      - name: Build runtime
-        if: runner.os == 'Linux'
-        run: >-
-          cargo rustc -p luminary-runtime --features runtime --crate-type staticlib,cdylib
-          && rm -f ./target/releases/liluminary_bruntime.d
-          && mv ./target/release/libluminary_runtime.* .
+      # - name: Build runtime
+      #   if: runner.os == 'Linux'
+      #   run: >-
+      #     cargo rustc -p luminary-runtime --features runtime --crate-type staticlib,cdylib
+      #     && rm -f ./target/releases/liluminary_bruntime.d
+      #     && mv ./target/release/libluminary_runtime.* .
       - id: cargo-dist
         name: Post-build
         # We force bash here just because github makes it really hard to get values up
