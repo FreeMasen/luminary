@@ -42,3 +42,35 @@ jobs:
       with:
         name: cdylib
         path: ./target/release/libluminary_runtime.so
+  announce:
+    needs:
+      - build-ubuntu-static
+      - build-ubuntu-dyn
+    # use "always() && ..." to allow us to wait for all publish jobs while
+    # still allowing individual publish jobs to skip themselves (for prereleases).
+    # "host" however must run to completion, no skipping allowed!
+    if: ${{ always() && needs.host.result == 'success' }}
+    runs-on: "ubuntu-20.04"
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: "Download Github Artifacts"
+        uses: actions/download-artifact@v3
+        with:
+          name: staticlib
+          path: artifacts
+      - name: Cleanup
+        run: |
+          # Remove the granular manifests
+          rm -f artifacts/*-dist-manifest.json
+      - name: Create Github Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ needs.plan.outputs.tag }}
+          name: ${{ fromJson(needs.host.outputs.val).announcement_title }}
+          body: ${{ fromJson(needs.host.outputs.val).announcement_github_body }}
+          prerelease: ${{ fromJson(needs.host.outputs.val).announcement_is_prerelease }}
+          artifacts: "artifacts/*"

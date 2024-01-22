@@ -50,3 +50,8 @@ msvc-crt-static = false
 build-local-artifacts = false
 # Local artifacts jobs to run in CI
 local-artifacts-jobs = ["./local-build-binary"]
+precise-builds = true
+
+[[workspace.metadata.dist.extra-artifacts]]
+artifacts = ["target/release/libluminary_runtime.*"]
+# buildact = ["cargo", "build", "--release", "--features", "runtime", "-p", "luminary-runtime"]
