@@ -54,4 +54,4 @@ precise-builds = true
 
 [[workspace.metadata.dist.extra-artifacts]]
 artifacts = ["target/release/libluminary_runtime.*"]
-# buildact = ["cargo", "build", "--release", "--features", "runtime", "-p", "luminary-runtime"]
+buildact = ["cargo", "rustc", "--release", "--features", "runtime", "-p", "luminary-runtime", "--crate-type", "cdylib,staticlib"]
