@@ -74,7 +74,7 @@ jobs:
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
         overwrite: true
     - name: Upload Release
-      if: !github.event.pull_request
+      if: ${{ !github.event.pull_request }}
       uses: ncipollo/release-action@v1
       allowUpdates: true
       tag: ${{ github.ref_name }}
