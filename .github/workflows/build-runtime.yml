@@ -11,8 +11,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  generate-cfg:
-    runs-on: ubuntu-latest
 
   build-runtime:
     strategy:
