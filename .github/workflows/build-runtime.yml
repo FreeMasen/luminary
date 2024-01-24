@@ -38,24 +38,24 @@ jobs:
       shell: bash
       run: >-
         mkdir $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.dll $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/
+        && cp ./target/release/libluminary_runtime.dll $TARGET_DIR/
         7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
     - name: find files Macos
       if: runner.os == 'Macos'
       shell: bash
       run: >-
         mkdir -p $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/
+        && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR/
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
     - name: find files Linux
       if: runner.os == 'Linux'
       shell: bash
       run: >-
         mkdir -p $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.a $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.so .$TARGET_DIR
+        && cp ./target/release/libluminary_runtime.a $TARGET_DIR/
+        && cp ./target/release/libluminary_runtime.so .$TARGET_DIR/
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
     - name: "Upload dist-manifest.json"
       uses: actions/upload-artifact@v3
