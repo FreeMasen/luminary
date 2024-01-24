@@ -30,7 +30,7 @@ lto = "thin"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0-pre1"
+version = "0.1.0-junk1"
 edition = "2021"
 publish = true
 
