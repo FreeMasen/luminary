@@ -31,7 +31,7 @@ jobs:
     - name: build runtime libs
       id: build-runtime
       run: >-
-        cargo clean &&Source
+        cargo clean &&
         cargo build --release -p luminary-runtime --features runtime --lib
     - name: find files Windows
       if: runner.os == 'Windows'
