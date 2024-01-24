@@ -66,7 +66,7 @@ jobs:
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: libs
+        name: luminary_libs-${{ matrix.os }}-${{github.ref_name}}
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
         overwrite: true
   # update-release:
