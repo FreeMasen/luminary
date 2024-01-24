@@ -64,14 +64,14 @@ jobs:
       with:
         name: artifacts
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
-  update-release:
-    needs:
-      - build-runtime
-    runs-on: "ubuntu-20.04"
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
+  # update-release:
+  #   needs:
+  #     - build-runtime
+  #   runs-on: "ubuntu-20.04"
+  #   env:
+  #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - uses: actions/checkout@v4
       # - name: "Download Github Artifacts"
       #   uses: actions/download-artifact@v3
       #   with:
