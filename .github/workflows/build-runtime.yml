@@ -5,6 +5,9 @@ on:
   release:
     types: 
       - published
+  push:
+    branches:
+      - rust-std
 
   workflow_dispatch:
 env:
@@ -38,16 +41,16 @@ jobs:
       shell: bash
       run: >-
         mkdir $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/
-        && cp ./target/release/libluminary_runtime.dll $TARGET_DIR/
+        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/libluminary_runtime.lib
+        && cp ./target/release/libluminary_runtime.dll $TARGET_DIR/libluminary_runtime.dll
         7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
     - name: find files Macos
       if: runner.os == 'Macos'
       shell: bash
       run: >-
         mkdir -p $TARGET_DIR
-        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/
-        && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR/
+        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/libluminary_runtime.lib
+        && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR/libluminary_runtime.dylib
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
     - name: find files Linux
       if: runner.os == 'Linux'
@@ -55,8 +58,8 @@ jobs:
       run: >-
         mkdir -p $TARGET_DIR
         && ls ./target/release
-        && cp ./target/release/libluminary_runtime.a $TARGET_DIR/
-        && cp ./target/release/libluminary_runtime.so .$TARGET_DIR/
+        && cp ./target/release/libluminary_runtime.a $TARGET_DIR/libluminary_runtime.a
+        && cp ./target/release/libluminary_runtime.so .$TARGET_DIR/libluminary_runtime.so
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
     - name: Upload
       uses: actions/upload-artifact@v3
