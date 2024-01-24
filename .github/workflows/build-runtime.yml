@@ -59,7 +59,7 @@ jobs:
         mkdir -p $TARGET_DIR
         && ls ./target/release
         && cp ./target/release/libluminary_runtime.a $TARGET_DIR/libluminary_runtime.a
-        && cp ./target/release/libluminary_runtime.so .$TARGET_DIR/libluminary_runtime.so
+        && cp ./target/release/libluminary_runtime.so $TARGET_DIR/libluminary_runtime.so
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
     - name: Upload
       uses: actions/upload-artifact@v3
