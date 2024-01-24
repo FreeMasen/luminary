@@ -25,7 +25,7 @@ jobs:
     runs-on: ${{ os.matrix }}
     env:
       TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{github.ref_name}}
-      COMP_SUFFIX: ${{ runner.os == 'Windows' && '7z' || 'tar.gz' }}
+      COMP_SUFFIX: ${{ startsWith(matrix.os, 'windows') && '7z' || 'tar.gz' }}
     steps:
     - uses: actions/checkout@v4
     - name: build runtime libs
