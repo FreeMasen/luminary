@@ -41,6 +41,7 @@ jobs:
       shell: bash
       run: >-
         mkdir $TARGET_DIR
+        && ls . && ls ./target/release
         && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/libluminary_runtime.lib
         && cp ./target/release/libluminary_runtime.dll $TARGET_DIR/libluminary_runtime.dll
         7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
@@ -49,6 +50,7 @@ jobs:
       shell: bash
       run: >-
         mkdir -p $TARGET_DIR
+        && ls . && ls ./target/release
         && cp ./target/release/libluminary_runtime.lib $TARGET_DIR/libluminary_runtime.lib
         && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR/libluminary_runtime.dylib
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
