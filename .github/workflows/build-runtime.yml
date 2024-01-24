@@ -42,8 +42,8 @@ jobs:
       run: >-
         mkdir $TARGET_DIR
         && ls . && ls ./target/release
-        && cp ./target/release/luminary_runtime.lib $TARGET_DIR/libluminary_runtime.lib
-        && cp ./target/release/luminary_runtime.dll $TARGET_DIR/libluminary_runtime.dll
+        && cp ./target/release/luminary_runtime.lib $TARGET_DIR/luminary_runtime.lib
+        && cp ./target/release/luminary_runtime.dll $TARGET_DIR/luminary_runtime.dll
         && 7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
     - name: find files Macos
       if: runner.os == 'Macos'
