@@ -66,8 +66,9 @@ jobs:
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: libs
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
+        overwrite: true
   # update-release:
   #   needs:
   #     - build-runtime
