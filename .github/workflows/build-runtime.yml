@@ -1,76 +1,85 @@
 name: Build Runtime
-
+permissions:
+  contents: write
 on:
-  push:
-    branches: [ "main" ]
-    tags:
-      - '**[0-9]+.[0-9]+.[0-9]+*'
-  pull_request:
-    branches: [ "main" ]
+  release:
+    types: 
+      - published
+
   workflow_dispatch:
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-ubuntu-static:
+  generate-cfg:
     runs-on: ubuntu-latest
+
+  build-runtime:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+          - ubuntu-22.04
+          - windows-2019
+          - windows-2022
+          - macos-11
+          - macos-12
+    runs-on: ${{ os.matrix }}
+    env:
+      TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{github.ref_name}}
+      COMP_SUFFIX: ${{ runner.os == 'Windows' && '7z' || 'tar.gz' }}
     steps:
     - uses: actions/checkout@v4
-    - name: build runtime staticlib
-      id: build-runtime-static
+    - name: build runtime libs
+      id: build-runtime
       run: >-
-        cargo clean &&
-        cargo rustc --release -p luminary-runtime
-        --features runtime --crate-type staticlib --lib
-    - name: "Upload artifacts"
+        cargo clean &&Source
+        cargo build --release -p luminary-runtime --features runtime --lib
+    - name: find files Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: >-
+        mkdir $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.dll $TARGET_DIR
+        7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
+    - name: find files Macos
+      if: runner.os == 'Macos'
+      shell: bash
+      run: >-
+        mkdir -p $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.lib $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR
+        && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
+    - name: find files Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: >-
+        mkdir -p $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.a $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.so .$TARGET_DIR
+        && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
+    - name: "Upload dist-manifest.json"
       uses: actions/upload-artifact@v3
       with:
-        name: staticlib
-        path: ./target/release/libluminary_runtime.a
-  build-ubuntu-dyn:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: build runtime cdylib
-      id: build-runtime-dyn
-      run: >-
-        cargo clean &&
-        cargo rustc --release -p luminary-runtime
-        --features runtime --crate-type cdylib --lib
-    - name: "Upload artifacts"
-      uses: actions/upload-artifact@v3
-      with:
-        name: cdylib
-        path: ./target/release/libluminary_runtime.so
-  announce:
+        name: artifacts
+        path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
+  update-release:
     needs:
-      - build-ubuntu-static
-      - build-ubuntu-dyn
-    # use "always() && ..." to allow us to wait for all publish jobs while
-    # still allowing individual publish jobs to skip themselves (for prereleases).
-    # "host" however must run to completion, no skipping allowed!
-    if: ${{ always() && needs.host.result == 'success' }}
+      - build-runtime
     runs-on: "ubuntu-20.04"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: "Download Github Artifacts"
-        uses: actions/download-artifact@v3
-        with:
-          name: staticlib
-          path: artifacts
-      - name: Cleanup
-        run: |
-          # Remove the granular manifests
-          rm -f artifacts/*-dist-manifest.json
-      - name: Create Github Release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ needs.plan.outputs.tag }}
-          name: ${{ fromJson(needs.host.outputs.val).announcement_title }}
-          body: ${{ fromJson(needs.host.outputs.val).announcement_github_body }}
-          prerelease: ${{ fromJson(needs.host.outputs.val).announcement_is_prerelease }}
-          artifacts: "artifacts/*"
+      # - name: "Download Github Artifacts"
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: staticlib
+      #     path: artifacts
+      # - name: Create Github Release
+      #   uses: ncipollo/release-action@v1
+      #   with:
+      #     allowUpdates: true
+      #     tag: ${{ needs.plan.outputs.tag }}
+      #     artifacts: "artifacts/*"
