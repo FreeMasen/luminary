@@ -22,7 +22,7 @@ jobs:
           - windows-2022
           - macos-11
           - macos-12
-    runs-on: ${{ os.matrix }}
+    runs-on: ${{ matrix.os }}
     env:
       TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{github.ref_name}}
       COMP_SUFFIX: ${{ startsWith(matrix.os, 'windows') && '7z' || 'tar.gz' }}
