@@ -32,6 +32,9 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
     - uses: actions/checkout@v4
+    - name: dump env
+      shell: bash
+      run: env
     - name: build runtime libs
       id: build-runtime
       run: >-
@@ -78,5 +81,5 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true
-        tag: ${{ github.ref_name }}
+        tag: ${{ env.GITHUB_REF || github.ref_name}}
         artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
