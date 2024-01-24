@@ -76,6 +76,7 @@ jobs:
     - name: Upload Release
       if: ${{ !github.event.pull_request }}
       uses: ncipollo/release-action@v1
-      allowUpdates: true
-      tag: ${{ github.ref_name }}
-      artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
+      with:
+        allowUpdates: true
+        tag: ${{ github.ref_name }}
+        artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
