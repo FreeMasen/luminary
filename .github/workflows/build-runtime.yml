@@ -2,12 +2,10 @@ name: Build Runtime
 permissions:
   contents: write
 on:
-  release:
-    types: 
-      - published
   push:
-    branches:
-      - rust-std
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+  pull_request:
 
   workflow_dispatch:
 env:
@@ -30,6 +28,7 @@ jobs:
       TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{github.ref_name}}
       COMP_SUFFIX: ${{ startsWith(matrix.os, 'windows') && '7z' || 'tar.gz' }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ !github.event.pull_request && github.ref_name || '' }}
     steps:
     - uses: actions/checkout@v4
     - name: dump env
@@ -77,9 +76,9 @@ jobs:
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
         overwrite: true
     - name: Upload Release
-      if: github.event.pull_request == false
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true
-        tag: ${{ env.GITHUB_REF }}
+        tag: ${{ env.TAG }}
+        name: ${{ github.ref_name }}
         artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
