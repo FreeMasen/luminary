@@ -80,5 +80,5 @@ jobs:
       with:
         allowUpdates: true
         tag: ${{ env.TAG }}
-        name: ${{ github.ref_name }}
+        name: Runtime ${{ github.ref_name }}
         artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
