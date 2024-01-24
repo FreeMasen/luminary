@@ -25,15 +25,13 @@ jobs:
           - macos-12
     runs-on: ${{ matrix.os }}
     env:
-      TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{github.ref_name}}
+      VERSION: ${{!github.event.pull_request && github.ref_name || github.head_ref }}
+      TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{!github.event.pull_request && github.ref_name || github.head_ref }}
       COMP_SUFFIX: ${{ startsWith(matrix.os, 'windows') && '7z' || 'tar.gz' }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ !github.event.pull_request && github.ref_name || '' }}
     steps:
     - uses: actions/checkout@v4
-    - name: dump env
-      shell: bash
-      run: env && echo '${{ tojson(github.event) }}'
     - name: build runtime libs
       id: build-runtime
       run: >-
@@ -70,7 +68,6 @@ jobs:
         && tar --strip-components=1 -czf $TARGET_DIR.$COMP_SUFFIX .
     - name: Upload PR
       uses: actions/upload-artifact@v4
-      if: github.event.pull_request
       with:
         name: luminary_libs-${{ matrix.os }}-${{ github.ref_name }}
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
