@@ -54,6 +54,7 @@ jobs:
       shell: bash
       run: >-
         mkdir -p $TARGET_DIR
+        && ls ./
         && cp ./target/release/libluminary_runtime.a $TARGET_DIR/
         && cp ./target/release/libluminary_runtime.so .$TARGET_DIR/
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
