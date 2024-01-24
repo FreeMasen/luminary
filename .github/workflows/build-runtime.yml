@@ -55,7 +55,7 @@ jobs:
         && cp ./target/release/libluminary_runtime.a $TARGET_DIR/libluminary_runtime.a
         && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR/libluminary_runtime.dylib
         && cd $TARGET_DIR
-        && tar -czf $TARGET_DIR.$COMP_SUFFIX .
+        && tar --strip-components=1 -czf $TARGET_DIR.$COMP_SUFFIX .
     - name: find files Linux
       if: runner.os == 'Linux'
       shell: bash
@@ -64,7 +64,7 @@ jobs:
         && cp ./target/release/libluminary_runtime.a $TARGET_DIR/libluminary_runtime.a
         && cp ./target/release/libluminary_runtime.so $TARGET_DIR/libluminary_runtime.so
         && cd $TARGET_DIR
-        && tar -czf $TARGET_DIR.$COMP_SUFFIX .
+        && tar --strip-components=1 -czf $TARGET_DIR.$COMP_SUFFIX .
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
