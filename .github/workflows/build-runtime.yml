@@ -44,7 +44,7 @@ jobs:
         && ls . && ls ./target/release
         && cp ./target/release/luminary_runtime.lib $TARGET_DIR/libluminary_runtime.lib
         && cp ./target/release/luminary_runtime.dll $TARGET_DIR/libluminary_runtime.dll
-        7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
+        && 7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" $TARGET_DIR
     - name: find files Macos
       if: runner.os == 'Macos'
       shell: bash
@@ -64,7 +64,7 @@ jobs:
         && cp ./target/release/libluminary_runtime.so $TARGET_DIR/libluminary_runtime.so
         && tar -czf $TARGET_DIR.$COMP_SUFFIX $TARGET_DIR
     - name: Upload
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
