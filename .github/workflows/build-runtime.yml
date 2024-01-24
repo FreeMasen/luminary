@@ -29,6 +29,7 @@ jobs:
     env:
       TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{github.ref_name}}
       COMP_SUFFIX: ${{ startsWith(matrix.os, 'windows') && '7z' || 'tar.gz' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
     - uses: actions/checkout@v4
     - name: build runtime libs
@@ -67,26 +68,14 @@ jobs:
         && tar --strip-components=1 -czf $TARGET_DIR.$COMP_SUFFIX .
     - name: Upload
       uses: actions/upload-artifact@v4
+      if: github.event.pull_request
       with:
-        name: luminary_libs-${{ matrix.os }}-${{github.ref_name}}
+        name: luminary_libs-${{ matrix.os }}-${{ github.ref_name }}
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
         overwrite: true
-  # update-release:
-  #   needs:
-  #     - build-runtime
-  #   runs-on: "ubuntu-20.04"
-  #   env:
-  #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-      # - name: "Download Github Artifacts"
-      #   uses: actions/download-artifact@v3
-      #   with:
-      #     name: staticlib
-      #     path: artifacts
-      # - name: Create Github Release
-      #   uses: ncipollo/release-action@v1
-      #   with:
-      #     allowUpdates: true
-      #     tag: ${{ needs.plan.outputs.tag }}
-      #     artifacts: "artifacts/*"
+    - name: Upload Release
+      if: !github.event.pull_request
+      uses: ncipollo/release-action@v1
+      allowUpdates: true
+      tag: ${{ github.ref_name }}
+      artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
