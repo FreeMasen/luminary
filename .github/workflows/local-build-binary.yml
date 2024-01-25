@@ -58,9 +58,10 @@ jobs:
       - name: Install aarch64 deps
         if: runner.os == 'Macos' && matrix.targets[0] == 'aarch64-apple-darwin'
         run: >-
-          ls /opt/ &&
-          ls /opt/homebrew &&
-          ls /opt/homebrew/Celler
+          arch -arm64e zsh &&
+          cd /usr/local && mkdir homebrew &&
+          curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C homebrew
+          arch -arm64e /usr/local/homebrew/bin/brew install zstd
       - name: update llvm-sys env var (MacOS)
         if: runner.os == 'Macos'
         run: echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
