@@ -39,13 +39,13 @@ jobs:
           directory: C:\LLVM
           version: 16.0.6
       - name: Install LLVM and Clang (MacOS)
-        if: runner.os == 'Macos'
+        if: runner.os == 'Macos' && matrix.targets[0] == 'aarch64-apple-darwin'
         run: >-
           env &&
-          echo '${{ toJson(matrix) }}'
+          echo '${{ toJson(matrix) }}' &&
           echo '${{ toJson(inputs.plan) }}'
       - name: Install LLVM and Clang (MacOS)
-        if: runner.os == 'Macos'
+        if: runner.os == 'Macos' && matrix.targets[0] == 'aarch64-apple-darwin'
         uses: KyleMayes/install-llvm-action@v1.9.0
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
