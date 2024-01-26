@@ -28,6 +28,10 @@ struct Args {
     opt: u8,
     #[arg(long, short)]
     runtime_location: Option<PathBuf>,
+    #[arg(long, short = 'L')]
+    location: Vec<PathBuf>,
+    #[arg(long, short = 'l')]
+    library: Vec<String>
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -73,6 +77,8 @@ fn main() {
         filetype,
         opt,
         runtime_location,
+        library,
+        location,
     } = Args::parse();
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
@@ -117,7 +123,7 @@ fn main() {
                 let tmp2 = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
                 (tmp2.path().to_owned(), Some(tmp2))
             };
-            link_exe(tmp_o.path(), &dest, runtime_location.as_ref());
+            link_exe(tmp_o.path(), &dest, runtime_location.as_ref(), library, location);
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
@@ -133,7 +139,7 @@ fn main() {
     }
 }
 
-fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>) {
+fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>, library: &[String], location: &[PathBuf]) {
     let mut cmd = Command::new("clang");
     cmd.arg(obj_path).arg("-o").arg(dest).stdout(Stdio::piped()).stderr(Stdio::piped());
     let clang_verbose = std::env::var("LUMINARY_USE_VERBOSE_CLANG")
@@ -146,6 +152,12 @@ fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>) {
     if let Some(runtime_path) = runtime_path {
         let runtime_path = runtime_path.canonicalize().expect("valid runtime path");
         cmd.arg(format!("-L{}", runtime_path.display()));
+    }
+    for l in library {
+        cmd.arg("-l").arg(l);
+    }
+    for l in location {
+        cmd.arg("-L").arg(l);
     }
     cmd
         .arg("-lm")
