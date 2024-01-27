@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use proc_macro::TokenStream;
 
-use case::CaseExt;
+use heck::ToShoutySnakeCase;
 use proc_macro2::Span;
 use syn::parse::Parse;
 
@@ -13,7 +13,7 @@ pub fn std_tvalue_export(input: TokenStream, annotated_item: TokenStream) -> Tok
     let f: syn::ItemFn = syn::parse(annotated_item).unwrap();
     let name = f.sig.ident.to_string();
     let export_name = format!("std::{}::{name}", attr.module_name());
-    let const_ident_name = name.to_snake().to_uppercase();
+    let const_ident_name = name.to_shouty_snake_case();
     let const_ident = syn::Ident::new(&const_ident_name, Span::call_site());
     let value = syn::LitStr::new(&export_name, Span::call_site());
     (quote::quote!(

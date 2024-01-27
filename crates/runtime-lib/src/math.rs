@@ -276,3 +276,44 @@ pub unsafe extern "C" fn bin_not(lhs: *mut TValue, out: *mut TValue) {
         value: TValueInner { i },
     };
 }
+
+#[runtime_macros::std_tvalue_export(module = "math")]
+pub unsafe extern "C" fn to_number(v: *mut TValue) -> f64 {
+    let Some(v) = v.as_ref() else {
+        return f64::NAN;
+    };
+    match v.tag {
+        tags::BOOLEAN => {
+            let v = unsafe { v.value.b };
+            if v {
+                1.0
+            } else {
+                0.0
+            }
+        },
+        tags::FLOAT => {
+            unsafe { v.value.f }
+        },
+        tags::INTEGER => {
+            let i = { v.value.i };
+            i as f64
+        },
+        tags::STRING_CONST => {
+            let s = { v.value.s };
+            let slice = unsafe {
+                core::slice::from_raw_parts(s.data, s.len as _)
+            };
+            if let Ok(s) = core::str::from_utf8(slice) {
+                if let Ok(f) = s.parse::<f64>() {
+                    f
+                } else {
+                    f64::NAN
+                }
+            } else {
+                f64::NAN
+            }
+        },
+        tags::NIL => 0.0,
+        _ => unreachable!(),
+    }
+}

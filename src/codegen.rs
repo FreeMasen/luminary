@@ -5,7 +5,7 @@ use inkwell::{
     context::ContextRef,
     module::Module,
     types::{FloatType, IntType, VoidType},
-    values::{AnyValue, ArrayValue, FloatValue, FunctionValue, IntValue, PointerValue}, attributes::{Attribute, AttributeLoc},
+    values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue}, attributes::{Attribute, AttributeLoc},
 };
 
 pub struct CodeGenerator<'ctx> {
@@ -27,7 +27,9 @@ struct ExpectedCtors<'ctx> {
 struct ExpectedHelpers<'ctx> {
     print: FunctionValue<'ctx>,
     tvalue_size: FunctionValue<'ctx>,
+    to_number: FunctionValue<'ctx>,
 }
+
 
 impl<'ctx> ExpectedCtors<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
@@ -115,7 +117,10 @@ impl<'ctx> ExpectedHelpers<'ctx> {
         print.add_attribute(AttributeLoc::Function, attr);
         tvalue_size.add_attribute(AttributeLoc::Function, attr);
         module.add_function("printf", c.i32_type().fn_type(&[c.i8_type().ptr_type(Default::default()).into()], true), None);
-        Self { print, tvalue_size }
+        let to_number = module.add_function(runtime::math::TO_NUMBER, c.f64_type().fn_type(&[
+            c.i8_type().ptr_type(Default::default()).into()
+            ], false), None);
+        Self { print, tvalue_size, to_number }
     }
 }
 
@@ -165,7 +170,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     pub fn emit_main_and_move_to_entry(&self) {
         let f = self
             .module
-            .add_function("main", self.void_type().fn_type(&[], false), None);
+            .add_function("main", self.i32_type().fn_type(&[], false), None);
         
         let bb = self.context.append_basic_block(f, "entry");
         self.position_at_end(bb);
@@ -185,8 +190,12 @@ impl<'ctx> CodeGenerator<'ctx> {
         self.module
     }
 
-    pub fn emit_main_return(&self) {
-        self.builder.build_return(None);
+    pub fn emit_main_return(&self, value: i32) {
+        self.emit_return(Some(&self.const_i32(value)));
+    }
+
+    pub fn emit_return(&self, v: Option<&dyn BasicValue<'ctx>>) {
+        self.builder.build_return(v);
     }
 
     pub fn void_type(&self) -> VoidType<'ctx> {
@@ -362,6 +371,18 @@ impl<'ctx> CodeGenerator<'ctx> {
     pub fn perform_print(&self, value: PointerValue<'ctx>) {
         self.builder
             .build_call(self.helpers.print, &[value.into()], "_");
+    }
+
+    pub fn perform_to_number(&self, value: PointerValue<'ctx>) -> FloatValue<'ctx> {
+        self.builder.build_call(self.helpers.to_number, &[
+            value.into()
+        ], "_")
+            .as_any_value_enum()
+            .into_float_value()
+    }
+
+    pub fn convert_float_to_i32(&self, value: FloatValue<'ctx>) -> IntValue<'ctx> {
+        self.builder.build_float_to_signed_int(value, self.i32_type(), "_")
     }
 
     pub fn binary_op_name(op: BinaryOperator) -> &'static str {

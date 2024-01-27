@@ -50,7 +50,7 @@ pub fn emit_code<'ctx>(gen: &CodeGenerator<'ctx>, lua: String) {
     let mut variables = HashMap::new();
     let mut p = Parser::new(lua.as_bytes());
     gen.emit_main_and_move_to_entry();
-
+    let mut ret_zero = true;
     while let Some(stmt) = p.next() {
         let stmt = stmt.unwrap();
         match stmt {
@@ -87,16 +87,73 @@ pub fn emit_code<'ctx>(gen: &CodeGenerator<'ctx>, lua: String) {
                 };
             }
             Statement::Expression(Expression::BinOp { left, op, right }) => {
-                let op_name = CodeGenerator::binary_op_name(op);
-                let lhs = expression_to_ptr(&gen, &*left, "lhs", &mut variables);
-                let rhs = expression_to_ptr(&gen, &*right, "rhs", &mut variables);
-                let dest = gen.alloca_tvalue("result");
-                let _success = gen.perform_binary_op("success", op_name, lhs, rhs, dest);
+                let _success = emit_bin_op(gen, &*left, &*right, op, &mut variables);
+            }
+            Statement::Return(ret) => {
+                if let Some(first) = ret.0.first() {
+                    match first {
+                        Expression::Nil => continue,
+                        Expression::False => {
+                            gen.emit_main_return(0);
+                            ret_zero = false;
+                        },
+                        Expression::True => {
+                            gen.emit_main_return(1);
+                            ret_zero = false;
+                        },
+                        Expression::Numeral(n) => {
+                            if let Ok(i) = n.0.parse::<i32>() {
+                                gen.emit_main_return(i);
+                                ret_zero = false;
+                                continue;
+                            } 
+                            if let Ok(f) = n.0.parse::<f32>() {
+                                let trimmed = f.abs();
+                                gen.emit_main_return(trimmed as i32);
+                                ret_zero = false;
+                            }
+                        },
+                        Expression::LiteralString(s) => {
+                            ret_zero = false;
+                            let mut val = [0u8;4];
+                            val.copy_from_slice(&s.0);
+                            let i = i32::from_be_bytes(val);
+                            gen.emit_main_return(i);
+                        },
+                        Expression::Name(n) => {
+                            let Some(existing) = variables.get(n.name.as_ref()) else {
+                                continue;
+                            };
+                            ret_zero = false;
+                            if existing.is_null() {
+                                gen.emit_main_return(0);
+                                continue;
+                            }
+                            let f = gen.perform_to_number(*existing);
+                            let i = gen.convert_float_to_i32(f);
+                            gen.emit_return(Some(&i));
+                        },
+                        Expression::VarArgs => todo!("var args..."),
+                        Expression::FunctionDef(_) => todo!(),
+                        Expression::TableCtor(_) => todo!(),
+                        Expression::BinOp { left, op, right } => {
+                            let success = emit_bin_op(gen, &*left, &*right, *op, &mut variables);
+                            let f = gen.perform_to_number(success);
+                            let i = gen.convert_float_to_i32(f);
+                            gen.emit_return(Some(&i));
+                        },
+                        Expression::UnaryOp { op, exp } => todo!("unop"),
+                        Expression::FuncCall(_) => todo!("FuncCall"),
+                        Expression::Suffixed(_) => todo!("Suffixed"),
+                    }
+                }
             }
             _ => unimplemented!("{stmt:?}"),
         }
     }
-    gen.emit_main_return();
+    if ret_zero {
+        gen.emit_main_return(0);
+    }
 }
 
 fn emit_assignment<'ctx>(

@@ -11,4 +11,4 @@ proc-macro = true
 syn = { version = "2", features = ["full"] }
 quote = { version = "1" }
 proc-macro2 = { version = "1" }
-case = "1.0.0"
+heck = "0.4"
