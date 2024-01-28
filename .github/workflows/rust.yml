@@ -66,15 +66,6 @@ jobs:
         force-version: true
         version: 16.0.6
         directory: ${{ github.workspace }}/llvm
-    - name: Install LLVM and Clang (MacOS-AArch64)
-      if: runner.os == 'Macos' && matrix.targets[0] == 'aarch64-apple-darwin'
-      uses: FreeMasen/install-llvm-action@c9be196bafb9b4f4a7486019d3e525be0b4dc110
-      with:
-        download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
-        force-version: true
-        version: 16.0.6
-        arch: aarch64
-        directory: ${{ github.workspace }}/llvm
     - name: update llvm-sys env var (MacOS)
       if: runner.os == 'Macos'
       run:  |

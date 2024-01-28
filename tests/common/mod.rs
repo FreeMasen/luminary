@@ -141,7 +141,7 @@ impl TestConfig {
         #[cfg(target_os = "macos")]
         cmd.env("DYLD_FALLBACK_LIBRARY_PATH", self.dynamic_runtime.parent().unwrap());
 
-        cmd.stderr(Stdio::inherit())
+        cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
             .unwrap()
