@@ -31,7 +31,7 @@ struct Args {
     #[arg(long, short = 'L')]
     location: Vec<PathBuf>,
     #[arg(long, short = 'l')]
-    library: Vec<String>
+    library: Vec<String>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -82,7 +82,7 @@ fn main() {
     } = Args::parse();
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
-
+    module.verify().unwrap();
     match filetype {
         FileType::Ll => {
             let mut dest = get_dest(output.as_ref());
@@ -123,7 +123,13 @@ fn main() {
                 let tmp2 = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
                 (tmp2.path().to_owned(), Some(tmp2))
             };
-            link_exe(tmp_o.path(), &dest, runtime_location.as_ref(), library, location);
+            link_exe(
+                tmp_o.path(),
+                &dest,
+                runtime_location.as_ref(),
+                &library,
+                &location,
+            );
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
@@ -139,14 +145,23 @@ fn main() {
     }
 }
 
-fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>, library: &[String], location: &[PathBuf]) {
+fn link_exe(
+    obj_path: &Path,
+    dest: &PathBuf,
+    runtime_path: Option<&PathBuf>,
+    library: &[String],
+    location: &[PathBuf],
+) {
     let mut cmd = Command::new("clang");
-    cmd.arg(obj_path).arg("-o").arg(dest).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.arg(obj_path)
+        .arg("-o")
+        .arg(dest)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let clang_verbose = std::env::var("LUMINARY_USE_VERBOSE_CLANG")
         .map(|s| !s.is_empty() && s != "0")
         .unwrap_or(false);
-    if clang_verbose
-    {
+    if clang_verbose {
         cmd.arg("--verbose");
     }
     if let Some(runtime_path) = runtime_path {
@@ -159,9 +174,7 @@ fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>, lib
     for l in location {
         cmd.arg("-L").arg(l);
     }
-    cmd
-        .arg("-lm")
-        .arg("-lluminary_runtime");
+    cmd.arg("-lm").arg("-lluminary_runtime");
     let child = cmd.spawn().unwrap();
     let clang_outout = child.wait_with_output().unwrap();
     if !clang_outout.status.success() {
@@ -176,7 +189,7 @@ fn link_exe(obj_path: &Path, dest: &PathBuf, runtime_path: Option<&PathBuf>, lib
         let stdout = String::from_utf8_lossy(&clang_outout.stdout);
         let stderr = String::from_utf8_lossy(&clang_outout.stderr);
         if !stdout.is_empty() {
-            eprintln!("{stdout}", );
+            eprintln!("{stdout}",);
         }
         if !stderr.is_empty() {
             eprintln!("{stderr}");

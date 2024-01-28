@@ -15,13 +15,6 @@ proptest = "1.4"
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
 
-[profile.release]
-panic = "abort"
-lto = "off"
-
-[profile.dev]
-panic = "abort"
-
 [features]
 default = []
 runtime = []

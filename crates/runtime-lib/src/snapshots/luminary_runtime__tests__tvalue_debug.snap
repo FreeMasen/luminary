@@ -1,9 +1,9 @@
 ---
 source: crates/runtime-lib/src/lib.rs
-expression: "&[TValue::new_nil(), TValue::new_bool(false), TValue::new_bool(true),\n            TValue::new_int(42), TValue::new_float(42.1),\n            TValue::new_str(\"hello world!\")]"
+expression: "&[TValue::new_nil(), TValue::new_bool(false), TValue::new_bool(true),\n            TValue::new_int(42), TValue::new_float(42.1), TValue::new_str(s)]"
 ---
 [
-    TValue::::Nil,
+    TValue::Nil,
     TValue::Bool(
         false,
     ),
@@ -17,6 +17,6 @@ expression: "&[TValue::new_nil(), TValue::new_bool(false), TValue::new_bool(true
         42.1,
     ),
     TValue::StringConst(
-        "hello world!",
+        hello world!,
     ),
 ]

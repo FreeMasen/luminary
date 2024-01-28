@@ -17,7 +17,9 @@ runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features 
 tempfile = "3.8"
 
 [dev-dependencies]
+escargot = "0.5"
 insta = "1.31"
+mlua = { version = "0.9", features = ["lua53", "vendored"]}
 proptest = "1.2"
 serde_json = "1"
 

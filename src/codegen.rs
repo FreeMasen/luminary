@@ -1,11 +1,12 @@
-use analisar::ast::BinaryOperator;
+use analisar::ast::{BinaryOperator, UnaryOperator};
 use inkwell::{
+    attributes::{Attribute, AttributeLoc},
     basic_block::BasicBlock,
     builder::Builder,
     context::ContextRef,
     module::Module,
     types::{FloatType, IntType, VoidType},
-    values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue}, attributes::{Attribute, AttributeLoc},
+    values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue},
 };
 
 pub struct CodeGenerator<'ctx> {
@@ -30,19 +31,16 @@ struct ExpectedHelpers<'ctx> {
     to_number: FunctionValue<'ctx>,
 }
 
-
 impl<'ctx> ExpectedCtors<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
-        let attr = Attribute::get_named_enum_kind_id("nounwind");
         let c = module.get_context();
-        let attr = c.create_enum_attribute(attr, 0);
         let nil = module.add_function(
             runtime::INIT,
             c.void_type()
                 .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
             None,
         );
-        nil.add_attribute(AttributeLoc::Function, attr);
+        apply_attrs_to_function(&c, &nil);
         let bool = module.add_function(
             runtime::INIT_BOOL,
             c.void_type().fn_type(
@@ -54,7 +52,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
-        bool.add_attribute(AttributeLoc::Function, attr);
+        apply_attrs_to_function(&c, &bool);
         let int = module.add_function(
             runtime::INIT_INT,
             c.void_type().fn_type(
@@ -66,7 +64,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
-        int.add_attribute(AttributeLoc::Function, attr);
+        apply_attrs_to_function(&c, &int);
         let float = module.add_function(
             runtime::INIT_FLOAT,
             c.void_type().fn_type(
@@ -78,7 +76,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
-        float.add_attribute(AttributeLoc::Function, attr);
+        apply_attrs_to_function(&c, &float);
         let string_const = module.add_function(
             runtime::INIT_STR,
             c.void_type().fn_type(
@@ -91,7 +89,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             ),
             None,
         );
-        string_const.add_attribute(AttributeLoc::Function, attr);
+        apply_attrs_to_function(&c, &string_const);
         Self {
             nil,
             bool,
@@ -105,7 +103,6 @@ impl<'ctx> ExpectedCtors<'ctx> {
 impl<'ctx> ExpectedHelpers<'ctx> {
     pub fn new(module: &Module<'ctx>) -> Self {
         let c = module.get_context();
-        let attr = c.create_enum_attribute(Attribute::get_named_enum_kind_id("nounwind"), 0);
         let print = module.add_function(
             runtime::PRINTLN,
             c.void_type()
@@ -114,13 +111,25 @@ impl<'ctx> ExpectedHelpers<'ctx> {
         );
         let tvalue_size =
             module.add_function(runtime::SIZE, c.i32_type().fn_type(&[], false), None);
-        print.add_attribute(AttributeLoc::Function, attr);
-        tvalue_size.add_attribute(AttributeLoc::Function, attr);
-        module.add_function("printf", c.i32_type().fn_type(&[c.i8_type().ptr_type(Default::default()).into()], true), None);
-        let to_number = module.add_function(runtime::math::TO_NUMBER, c.f64_type().fn_type(&[
-            c.i8_type().ptr_type(Default::default()).into()
-            ], false), None);
-        Self { print, tvalue_size, to_number }
+        apply_attrs_to_function(&c, &print);
+        apply_attrs_to_function(&c, &tvalue_size);
+        module.add_function(
+            "printf",
+            c.i32_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], true),
+            None,
+        );
+        let to_number = module.add_function(
+            runtime::math::TO_NUMBER,
+            c.f64_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+            None,
+        );
+        Self {
+            print,
+            tvalue_size,
+            to_number,
+        }
     }
 }
 
@@ -130,7 +139,6 @@ impl<'ctx> CodeGenerator<'ctx> {
         let builder = context.create_builder();
         let ctors = ExpectedCtors::new(&module);
         let helpers = ExpectedHelpers::new(&module);
-        let attr = context.create_enum_attribute(Attribute::get_named_enum_kind_id("nounwind"), 0);
         for name in &[
             runtime::math::ADD,
             runtime::math::SUB,
@@ -156,7 +164,24 @@ impl<'ctx> CodeGenerator<'ctx> {
                 ),
                 None,
             );
-            f.add_attribute(AttributeLoc::Function, attr);
+            apply_attrs_to_function(&context, &f);
+        }
+        for name in &[
+            runtime::math::NEG,
+            runtime::math::BIN_NOT,
+        ] {
+            let f = module.add_function(
+                name,
+                context.void_type().fn_type(
+                    &[
+                        context.i8_type().ptr_type(Default::default()).into(),
+                        context.i8_type().ptr_type(Default::default()).into(),
+                    ],
+                    false,
+                ),
+                None,
+            );
+            apply_attrs_to_function(&context, &f);
         }
         Self {
             context,
@@ -171,19 +196,14 @@ impl<'ctx> CodeGenerator<'ctx> {
         let f = self
             .module
             .add_function("main", self.i32_type().fn_type(&[], false), None);
-        
+
         let bb = self.context.append_basic_block(f, "entry");
         self.position_at_end(bb);
-        self.apply_attrs_to_main(&f);
+        self.apply_attrs(&f);
     }
 
-    fn apply_attrs_to_main<'a>(&self, f: &FunctionValue<'a>) {
-        for name in ["noinline", "nounwind", "optnone", "uwtable"].into_iter() {
-            let attr = Attribute::get_named_enum_kind_id(name);
-            let attr = self.context.create_enum_attribute(attr, 0);
-            f.add_attribute(AttributeLoc::Function, attr)
-        }
-        
+    fn apply_attrs<'a>(&self, f: &FunctionValue<'a>) {
+        apply_attrs_to_function(&self.context, f);
     }
 
     pub fn into_module(self) -> Module<'ctx> {
@@ -305,7 +325,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     /// Generate code
     pub fn init_tvalue_num(&self, value: f64, name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
-        if value == value.abs() {
+        if value == value.trunc() {
             let init = self.const_i64(value as i64);
             self.builder
                 .build_call(self.ctors.int, &[alloca.into(), init.into()], "_");
@@ -314,6 +334,13 @@ impl<'ctx> CodeGenerator<'ctx> {
             self.builder
                 .build_call(self.ctors.float, &[alloca.into(), init.into()], "_");
         }
+        alloca
+    }
+    pub fn init_tvalue_int(&self, value: i64, name: &str) -> PointerValue<'ctx> {
+        let alloca = self.alloca_tvalue(name);
+        let init = self.const_i64(value);
+        self.builder
+            .build_call(self.ctors.int, &[alloca.into(), init.into()], "_");
         alloca
     }
 
@@ -338,15 +365,13 @@ impl<'ctx> CodeGenerator<'ctx> {
         op_name: &str,
         value: PointerValue<'ctx>,
         dest: PointerValue<'ctx>,
-    ) -> IntValue<'ctx> {
+    ) {
         let op_fn = self
             .module
             .get_function(op_name)
             .unwrap_or_else(|| panic!("{op_name} is not a function in this module"));
         self.builder
-            .build_call(op_fn, &[value.into(), dest.into()], success_name)
-            .as_any_value_enum()
-            .into_int_value()
+            .build_call(op_fn, &[value.into(), dest.into()], success_name);
     }
 
     /// generate code that will perform a binary math operation placing the result in the `dest` pointer
@@ -374,15 +399,15 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     pub fn perform_to_number(&self, value: PointerValue<'ctx>) -> FloatValue<'ctx> {
-        self.builder.build_call(self.helpers.to_number, &[
-            value.into()
-        ], "_")
+        self.builder
+            .build_call(self.helpers.to_number, &[value.into()], "_")
             .as_any_value_enum()
             .into_float_value()
     }
 
     pub fn convert_float_to_i32(&self, value: FloatValue<'ctx>) -> IntValue<'ctx> {
-        self.builder.build_float_to_signed_int(value, self.i32_type(), "_")
+        self.builder
+            .build_float_to_signed_int(value, self.i32_type(), "_")
     }
 
     pub fn binary_op_name(op: BinaryOperator) -> &'static str {
@@ -410,5 +435,27 @@ impl<'ctx> CodeGenerator<'ctx> {
             And => todo!(),
             Or => todo!(),
         }
+    }
+    pub fn unary_op_name(op: UnaryOperator) -> &'static str {
+        use UnaryOperator::*;
+        match op {
+            Negate => runtime::math::NEG,
+            Not => todo!(),
+            Length => todo!(),
+            BitwiseNot => runtime::math::BIN_NOT,
+        }
+    }
+}
+
+fn apply_attrs_to_function<'a>(context: &ContextRef<'a>, f: &FunctionValue<'a>) {
+    for name in [
+        "noinline", "nounwind", "optnone",
+        // "uwtable"
+    ]
+    .into_iter()
+    {
+        let attr = Attribute::get_named_enum_kind_id(name);
+        let attr = context.create_enum_attribute(attr, 0);
+        f.add_attribute(AttributeLoc::Function, attr)
     }
 }
