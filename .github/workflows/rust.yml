@@ -88,5 +88,7 @@ jobs:
         $var = C:\LLVM\bin\llvm-config --prefix
         echo "LLVM_SYS_160_PREFIX=$var" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       shell: pwsh
+    - name: Run Link Integration Tests
+      run: cargo test --test link
     - name: Run Math Integration Tests
       run: cargo test --test math
