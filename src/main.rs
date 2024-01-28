@@ -174,7 +174,9 @@ fn link_exe(
     for l in location {
         cmd.arg("-L").arg(l);
     }
-    cmd.arg("-lm").arg("-lluminary_runtime");
+    #[cfg(target_os = "linux")]
+    cmd.arg("-lm");
+    cmd.arg("-lluminary_runtime");
     let child = cmd.spawn().unwrap();
     let clang_outout = child.wait_with_output().unwrap();
     if !clang_outout.status.success() {

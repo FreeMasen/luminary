@@ -26,7 +26,7 @@ jobs:
     - name: Run tests
       run: >- 
         cargo test --verbose &&
-        cargo test -p luminary_runtime --features runtime
+        cargo test -p luminary-runtime --features runtime
       env: 
         LLVM_SYS_160_PREFIX: ${{ env.LLVM_PATH }}
         LUMINARY_PRINT_TVALUE: 1
