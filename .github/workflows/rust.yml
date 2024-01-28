@@ -35,6 +35,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
+      fail-fast: false
     runs-on: ${{matrix.os}}
     env:
       LUMINARY_USE_VERBOSE_CLANG: 1
