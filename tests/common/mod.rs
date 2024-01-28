@@ -136,7 +136,7 @@ impl TestConfig {
         #[cfg(target_os = "windows")]
         {
             let path = std::env::var("PATH");
-            cmd.env("PATH", format!("{path};{}", self.dynamic_runtime.parent().unwrap()));
+            cmd.env("PATH", format!("{path};{}", self.dynamic_runtime.parent().unwrap().display()));
         }
         #[cfg(target_os = "macos")]
         cmd.env("DYLD_FALLBACK_LIBRARY_PATH", self.dynamic_runtime.parent().unwrap());
