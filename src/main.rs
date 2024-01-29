@@ -185,7 +185,7 @@ fn link_exe(
     if !clang_outout.status.success() {
         eprint!("clang");
         for arg in cmd.get_args() {
-            eprint!(" {}", arg.to_str().unwrap())
+            eprint!(r#" "{}""#, arg.to_str().unwrap())
         }
         eprintln!("");
         eprintln!("linking with clang failed with the following output:");
