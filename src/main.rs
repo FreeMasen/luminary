@@ -116,7 +116,7 @@ fn main() {
             let obj = run_llc(LlvmFileType::Object, &module, opt);
             let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
             std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
-
+            
             let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
                 (dest_path.clone(), None)
             } else {
@@ -152,6 +152,9 @@ fn link_exe(
     library: &[String],
     location: &[PathBuf],
 ) {
+    if !obj_path.exists() {
+        panic!("object path does not exist at {}", obj_path.display());
+    }
     let mut cmd = Command::new("clang");
     cmd.arg(obj_path)
         .arg("-o")
