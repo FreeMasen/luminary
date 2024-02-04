@@ -3,6 +3,11 @@ use core::fmt::{Debug, Display};
 
 pub mod math;
 
+pub const MIN_SAFE_INT: i64 = -(1i64 << f64::MANTISSA_DIGITS);
+pub const MAX_SAFE_INT: i64 = 1i64 << f64::MANTISSA_DIGITS;
+pub const MIN_SAFE_FLOAT: f64 = MIN_SAFE_INT as f64;
+pub const MAX_SAFE_FLOAT: f64 = MAX_SAFE_INT as f64;
+
 #[cfg(feature = "runtime")]
 mod tags {
     pub const NIL: u8 = 0;
@@ -24,6 +29,14 @@ pub struct TValue {
 impl TValue {
     pub const fn size() -> u32 {
         core::mem::size_of::<Self>() as _
+    }
+
+    pub fn clone_number(&self) -> Option<Self> {
+        match self.tag {
+            tags::INTEGER => Some(TValue::new_int(unsafe { self.value.i })),
+            tags::FLOAT => Some(TValue::new_float(unsafe { self.value.f })),
+            _ => None,
+        }
     }
 }
 
@@ -122,15 +135,18 @@ impl TValue {
             value: TValueInner { b },
         }
     }
+
     pub fn new_int(i: i64) -> Self {
         Self {
             tag: tags::INTEGER,
             value: TValueInner { i },
         }
     }
+
     pub fn new_float(f: f64) -> Self {
-        if f.is_finite() && f.floor() == f && f <= i64::MAX as _ && f >= i64::MIN as _ {
-            return TValue::new_int(f as i64);
+        // if float_fits_int(f) {
+        if f.is_finite() && f.floor() == f && f <= i64::MAX as f64 && f >= i64::MIN as f64 {
+            return TValue::new_int(unsafe {f.to_int_unchecked()});
         }
         Self {
             tag: tags::FLOAT,
@@ -163,6 +179,13 @@ impl TValue {
             _ => false,
         }
     }
+}
+
+pub fn float_fits_int(v: f64) -> bool {
+    v.is_finite() 
+    && v.floor() == v
+    && MAX_SAFE_FLOAT <= v
+    && v >= MIN_SAFE_FLOAT
 }
 
 #[cfg(feature = "runtime")]
@@ -340,5 +363,20 @@ mod tests {
             TValue::new_str(s),
         ])
     }
+    
+    // let v = 2.929614667044763e245;
+    #[test]
+    fn new_float_becomes_int() {
+        proptest::proptest!(|(l: i64)| {
+            if !(MIN_SAFE_INT..=MAX_SAFE_INT).contains(&l) {
+                // skip lossy conversion values
+                return Ok(())
+            }
+            let v = TValue::new_float(l as f64);
 
+            proptest::prop_assert_eq!(v.tag, tags::INTEGER);
+            proptest::prop_assert_eq!(unsafe {v.value.i}, l);
+        });
+
+    }
 }

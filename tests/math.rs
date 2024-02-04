@@ -24,11 +24,11 @@ fn add_dynamic() {
         // of a function, we need to evaluate these operations
         // slightly differently, for the mlua, we are just using
         // the expression wrapped in parens but for the binary
-        // test we are using the print function to output our 
+        // test we are using the print function to output our
         // value to stdout and then we parse that.
         let expr = format!("({l}+{r})");
         let script = format!("print{expr}");
-        
+
         let expected = lua
             .load(&expr).eval().map(|v: i64| {
             v
@@ -41,7 +41,7 @@ fn add_dynamic() {
             panic!("Failed to exec bin:\n{}\n{stdout}", String::from_utf8_lossy(&exec.stderr));
         }
         let v_str = stdout.lines().next().expect(">= 1 line");
-        let v: i64 = v_str.parse().unwrap();        
+        let v: i64 = v_str.parse().unwrap();
         if v.to_string() != v_str {
             eprintln!("Error paring:\ns: {v_str}\ni: {v}")
         } else {
@@ -50,14 +50,13 @@ fn add_dynamic() {
     });
 }
 
-
 // #[cfg(test)]
 // mod tests {
 //     use crate::TValue;
 
 //     #[test]
 //     fn int_add() {
-        
+
 //     }
 
 //     #[test]
@@ -296,7 +295,7 @@ fn add_dynamic() {
 //                 crate::math::rem(&mut lhs, &mut rhs, &mut result);
 //             }
 
-//             let expected = lua.load(dbg!(format!("{}%{}", l, r, ))).eval().map(|v: f64| {
+//             let expected = lua.load(format!("{}%{}", l, r, )).eval().map(|v: f64| {
 //                 TValue::new_float(v)
 //             }).unwrap_or_else(|_| TValue::new_bool(false));
 //             if !(expected.is_nan() && result.is_nan()) {

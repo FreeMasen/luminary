@@ -1,4 +1,7 @@
-use std::{path::{Path, PathBuf}, process::{Command, Output, Stdio}};
+use std::{
+    path::{Path, PathBuf},
+    process::{Command, Output, Stdio},
+};
 
 use escargot::format::Message;
 
@@ -136,10 +139,19 @@ impl TestConfig {
         #[cfg(target_os = "windows")]
         {
             let path = std::env::var("PATH").expect("PATH is set");
-            cmd.env("PATH", format!("{path};{}", self.dynamic_runtime.parent().unwrap().display()));
+            cmd.env(
+                "PATH",
+                format!(
+                    "{path};{}",
+                    self.dynamic_runtime.parent().unwrap().display()
+                ),
+            );
         }
         #[cfg(target_os = "macos")]
-        cmd.env("DYLD_FALLBACK_LIBRARY_PATH", self.dynamic_runtime.parent().unwrap());
+        cmd.env(
+            "DYLD_FALLBACK_LIBRARY_PATH",
+            self.dynamic_runtime.parent().unwrap(),
+        );
 
         cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())

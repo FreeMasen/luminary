@@ -166,10 +166,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             );
             apply_attrs_to_function(&context, &f);
         }
-        for name in &[
-            runtime::math::NEG,
-            runtime::math::BIN_NOT,
-        ] {
+        for name in &[runtime::math::NEG, runtime::math::BIN_NOT] {
             let f = module.add_function(
                 name,
                 context.void_type().fn_type(

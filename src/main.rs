@@ -116,7 +116,7 @@ fn main() {
             let obj = run_llc(LlvmFileType::Object, &module, opt);
             let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
             std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
-            
+
             let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
                 (dest_path.clone(), None)
             } else {

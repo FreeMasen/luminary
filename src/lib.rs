@@ -2,7 +2,8 @@ use core::fmt;
 use std::{backtrace::Backtrace, collections::HashMap, path::PathBuf};
 
 use analisar::{
-    ast::{BinaryOperator, Expression, Statement, UnaryOperator}, Parser
+    ast::{BinaryOperator, Expression, Statement, UnaryOperator},
+    Parser,
 };
 use codegen::CodeGenerator;
 use inkwell::{context::Context, module::Module, values::PointerValue};
