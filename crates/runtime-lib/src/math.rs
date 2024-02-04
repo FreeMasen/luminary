@@ -593,7 +593,7 @@ pub unsafe extern "C" fn to_number(v: *mut TValue) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::{tags, TValue};
+    use crate::TValue;
 
     #[test]
     fn int_add() {
@@ -706,7 +706,7 @@ mod tests {
             let mut lhs = TValue::new_float(l);
             let mut rhs = TValue::new_float(r);
             let mut result = TValue::new_bool(false);
-            let expected = lua.load(&format!("({})-({})", l, r)).eval().map(|v: f64| {
+            let expected = lua.load(&format!("({:e})-({:e})", l, r)).eval().map(|v: f64| {
                 TValue::new_float(v)
             }).unwrap_or_else(|_| TValue::new_bool(false));
 
