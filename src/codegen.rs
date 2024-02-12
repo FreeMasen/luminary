@@ -149,8 +149,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             runtime::math::REM,
             runtime::math::BIN_AND,
             runtime::math::BIN_OR,
-            runtime::math::BIN_RHS,
-            runtime::math::BIN_LHS,
+            runtime::math::BIN_SHR,
+            runtime::math::BIN_SHL,
         ] {
             let f = module.add_function(
                 name,
@@ -420,8 +420,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             BitwiseAnd => runtime::math::BIN_AND,
             BitwiseXor => runtime::math::BIN_XOR,
             BitwiseOr => runtime::math::BIN_OR,
-            RightShift => runtime::math::BIN_RHS,
-            LeftShift => runtime::math::BIN_LHS,
+            RightShift => runtime::math::BIN_SHR,
+            LeftShift => runtime::math::BIN_SHL,
             Concatenate => todo!(),
             GreaterThan => todo!(),
             GreaterThanEqual => todo!(),

@@ -38,6 +38,21 @@ impl TValue {
             _ => None,
         }
     }
+
+    pub fn get_integer(&self) -> Option<i64> {
+        if self.tag == tags::INTEGER {
+            return Some(unsafe { self.value.i });
+        }
+        None
+    }
+
+    pub fn get_float_or_cast(&self) -> Option<f64> {
+        match self.tag {
+            tags::INTEGER => Some(unsafe { self.value.i as f64 }),
+            tags::FLOAT => Some(unsafe { self.value.f }),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(feature = "runtime")]
@@ -144,10 +159,6 @@ impl TValue {
     }
 
     pub fn new_float(f: f64) -> Self {
-        // if float_fits_int(f) {
-        if f.is_finite() && f.floor() == f && f <= i64::MAX as f64 && f >= i64::MIN as f64 {
-            return TValue::new_int(unsafe {f.to_int_unchecked()});
-        }
         Self {
             tag: tags::FLOAT,
             value: TValueInner { f },
@@ -182,10 +193,7 @@ impl TValue {
 }
 
 pub fn float_fits_int(v: f64) -> bool {
-    v.is_finite() 
-    && v.floor() == v
-    && MAX_SAFE_FLOAT <= v
-    && v >= MIN_SAFE_FLOAT
+    v.is_finite() && v.floor() == v && MAX_SAFE_FLOAT <= v && v >= MIN_SAFE_FLOAT
 }
 
 #[cfg(feature = "runtime")]
@@ -362,21 +370,5 @@ mod tests {
             TValue::new_float(42.1),
             TValue::new_str(s),
         ])
-    }
-    
-    // let v = 2.929614667044763e245;
-    #[test]
-    fn new_float_becomes_int() {
-        proptest::proptest!(|(l: i64)| {
-            if !(MIN_SAFE_INT..=MAX_SAFE_INT).contains(&l) {
-                // skip lossy conversion values
-                return Ok(())
-            }
-            let v = TValue::new_float(l as f64);
-
-            proptest::prop_assert_eq!(v.tag, tags::INTEGER);
-            proptest::prop_assert_eq!(unsafe {v.value.i}, l);
-        });
-
     }
 }
