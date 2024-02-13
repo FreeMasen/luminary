@@ -1,44 +1,83 @@
 name: Build Runtime
-
+permissions:
+  contents: write
 on:
   push:
-    branches: [ "main" ]
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
   pull_request:
-    branches: [ "main" ]
+
   workflow_dispatch:
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-ubuntu-static:
-    runs-on: ubuntu-latest
+
+  build-runtime:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+          - ubuntu-22.04
+          - windows-2019
+          - windows-2022
+          - macos-11
+          - macos-12
+          - macos-14
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{!github.event.pull_request && github.ref_name || github.head_ref }}
+      TARGET_DIR: ${{ github.workspace }}/luminary_runtime-${{ matrix.os }}-${{!github.event.pull_request && github.ref_name || github.head_ref }}
+      COMP_SUFFIX: ${{ startsWith(matrix.os, 'windows') && '7z' || 'tar.gz' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ !github.event.pull_request && github.ref_name || '' }}
     steps:
     - uses: actions/checkout@v4
-    - name: build runtime staticlib
-      id: build-runtime-static
+    - name: build runtime libs
+      id: build-runtime
       run: >-
         cargo clean &&
-        cargo rustc --release -p luminary-runtime
-        --features runtime --crate-type staticlib --lib &&
-        echo "{\"staticlib\":\"$(find . -name libluminary_runtime.a)}\"" >> "$GITHUB_OUTPUT"
-    - name: "Upload artifacts"
-      uses: actions/upload-artifact@v3
-      with:
-        name: staticlib
-        path: ${{ steps.build-runtime-static.outputs.staticlib }}
-  build-ubuntu-dyn:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: build runtime cdylib
-      id: build-runtime-dyn
+        cargo build --release -p luminary-runtime --features runtime --lib
+    - name: find files Windows
+      if: runner.os == 'Windows'
+      shell: bash
       run: >-
-        cargo clean &&
-        cargo rustc --release -p luminary-runtime
-        --features runtime --crate-type cdylib --lib &&
-        echo "{\"dynlib\":\"$(find . -name libluminary_runtime.so)}\"" >> "$GITHUB_OUTPUT"
-    - name: "Upload artifacts"
-      uses: actions/upload-artifact@v3
+        mkdir $TARGET_DIR
+        && ls . && ls ./target/release
+        && cp ./target/release/luminary_runtime.lib $TARGET_DIR/luminary_runtime.lib
+        && cp ./target/release/luminary_runtime.dll $TARGET_DIR/luminary_runtime.dll
+        && cd $TARGET_DIR
+        && 7z a -mx9 "$TARGET_DIR.$COMP_SUFFIX" .
+    - name: find files Macos
+      if: runner.os == 'Macos'
+      shell: bash
+      run: >-
+        mkdir -p $TARGET_DIR
+        && ls . && ls ./target/release
+        && cp ./target/release/libluminary_runtime.a $TARGET_DIR/libluminary_runtime.a
+        && cp ./target/release/libluminary_runtime.dylib $TARGET_DIR/libluminary_runtime.dylib
+        && cd $TARGET_DIR
+        && tar --strip-components=1 -czf $TARGET_DIR.$COMP_SUFFIX .
+    - name: find files Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: >-
+        mkdir -p $TARGET_DIR
+        && cp ./target/release/libluminary_runtime.a $TARGET_DIR/libluminary_runtime.a
+        && cp ./target/release/libluminary_runtime.so $TARGET_DIR/libluminary_runtime.so
+        && cd $TARGET_DIR
+        && tar --strip-components=1 -czf $TARGET_DIR.$COMP_SUFFIX .
+    - name: Upload PR
+      uses: actions/upload-artifact@v4
       with:
-        name: staticlib
-        path: ${{ steps.build-runtime-dyn.outputs.dynlib }}
+        name: luminary_libs-${{ matrix.os }}-${{ github.ref_name }}
+        path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
+        overwrite: true
+    - name: Upload Release
+      uses: ncipollo/release-action@v1
+      if: ${{ !github.event.pull_request }}
+      with:
+        allowUpdates: true
+        tag: ${{ env.TAG }}
+        name: Runtime ${{ github.ref_name }}
+        artifacts: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}

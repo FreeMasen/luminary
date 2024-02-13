@@ -1,40 +1,62 @@
 [package]
 name = "luminary"
-version = "0.1.0-pre1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 repository = "https://github.com/FreeMasen/luminary"
+authors = ["Robert Masen <r.f.masen@gmail.com>"]
+description = "A compiler for lua."
 
 [dependencies]
 analisar = "0.2"
-clap = { version = "4.4", features = [ "derive" ] }
+clap = { version = "4.4", features = ["derive"] }
 inkwell = { version = "0.2", features = ["llvm16-0"] }
 lex_lua = "0.1.9"
+runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features = [
+    "names",
+] }
 tempfile = "3.8"
 
 [dev-dependencies]
+escargot = "0.5"
 insta = "1.31"
+mlua = { version = "0.9", features = ["lua53", "vendored"]}
 proptest = "1.2"
+serde_json = "1"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
 inherits = "release"
 lto = "thin"
 
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0-junk1"
+edition = "2021"
+publish = true
+
 # Config for 'cargo dist'
 [workspace.metadata.dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.4.0"
+cargo-dist-version = "0.8.0"
 # CI backends to support
 ci = ["github"]
 # The installers to generate for each app
 installers = ["shell", "powershell"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
+targets = [
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
 # Publish jobs to run in CI
 pr-run-mode = "upload"
-# Skip checking whether the specified configuration files are up to date
-allow-dirty = ["ci"]
-# Disable the c runtime static linking for Windows releases, this means that users will need
-# to provide their own crt when running the outputed binary
-# TODO: remove this some day
+# Whether +crt-static should be used on msvc
 msvc-crt-static = false
+# Whether CI should include auto-generated code to build local artifacts
+build-local-artifacts = false
+# Local artifacts jobs to run in CI
+local-artifacts-jobs = ["./local-build-binary"]
+precise-builds = true

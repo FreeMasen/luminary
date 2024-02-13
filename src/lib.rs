@@ -2,15 +2,13 @@ use core::fmt;
 use std::{backtrace::Backtrace, collections::HashMap, path::PathBuf};
 
 use analisar::{
-    ast::{BinaryOperator, Expression, Statement},
+    ast::{BinaryOperator, Expression, Statement, UnaryOperator},
     Parser,
 };
 use codegen::CodeGenerator;
 use inkwell::{context::Context, module::Module, values::PointerValue};
-use tvalue::tvalue_names;
 pub mod bytecode;
 pub mod codegen;
-pub mod tvalue;
 
 #[derive(Debug)]
 pub enum Error {
@@ -41,11 +39,6 @@ impl Error {
 pub fn run_on<'ctx>(context: &'ctx Context, path: PathBuf) -> Module<'ctx> {
     let target_module =
         context.create_module(path.file_stem().expect("file_stem").to_str().unwrap());
-    let mut std_builder = tvalue::TValueModuleBuilder::new(&context);
-    let tvalue_module = std_builder.gen_lib();
-    target_module
-        .link_in_module(tvalue_module)
-        .expect("linking should work");
     let generator = codegen::CodeGenerator::new(target_module);
     let lua = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("Error reading {}: {e}", path.display()));
@@ -57,6 +50,7 @@ pub fn emit_code<'ctx>(gen: &CodeGenerator<'ctx>, lua: String) {
     let mut variables = HashMap::new();
     let mut p = Parser::new(lua.as_bytes());
     gen.emit_main_and_move_to_entry();
+    let mut ret_zero = true;
     while let Some(stmt) = p.next() {
         let stmt = stmt.unwrap();
         match stmt {
@@ -93,30 +87,74 @@ pub fn emit_code<'ctx>(gen: &CodeGenerator<'ctx>, lua: String) {
                 };
             }
             Statement::Expression(Expression::BinOp { left, op, right }) => {
-                use tvalue_names::math::*;
-                let op_name = match op {
-                    BinaryOperator::Add => ADD,
-                    BinaryOperator::Subtract => SUB,
-                    BinaryOperator::Multiply => MUL,
-                    BinaryOperator::Divide => DIV,
-                    BinaryOperator::FloorDivide => FLOOR_DIV,
-                    BinaryOperator::Power => POW,
-                    BinaryOperator::Modulo => MOD,
-                    BinaryOperator::BitwiseAnd => AND,
-                    BinaryOperator::BitwiseOr => OR,
-                    BinaryOperator::RightShift => RSH,
-                    BinaryOperator::LeftShift => LSH,
-                    _ => unimplemented!("{op:?}"),
-                };
-                let lhs = expression_to_ptr(&gen, &*left, "lhs", &mut variables);
-                let rhs = expression_to_ptr(&gen, &*right, "rhs", &mut variables);
-                let dest = gen.alloca_tvalue("result");
-                let _success = gen.perform_binary_op("success", op_name, lhs, rhs, dest);
+                let _success = emit_bin_op(gen, &*left, &*right, op, &mut variables);
+            }
+            Statement::Return(ret) => {
+                if let Some(first) = ret.0.first() {
+                    match first {
+                        Expression::Nil => continue,
+                        Expression::False => {
+                            gen.emit_main_return(0);
+                            ret_zero = false;
+                        }
+                        Expression::True => {
+                            gen.emit_main_return(1);
+                            ret_zero = false;
+                        }
+                        Expression::Numeral(n) => {
+                            if let Ok(i) = n.0.parse::<i32>() {
+                                gen.emit_main_return(i);
+                                ret_zero = false;
+                                continue;
+                            }
+                            if let Ok(f) = n.0.parse::<f32>() {
+                                let trimmed = f.abs();
+                                gen.emit_main_return(trimmed as i32);
+                                ret_zero = false;
+                            }
+                        }
+                        Expression::LiteralString(s) => {
+                            ret_zero = false;
+                            let mut val = [0u8; 4];
+                            val.copy_from_slice(&s.0);
+                            let i = i32::from_be_bytes(val);
+                            gen.emit_main_return(i);
+                        }
+                        Expression::Name(n) => {
+                            let Some(existing) = variables.get(n.name.as_ref()) else {
+                                continue;
+                            };
+                            ret_zero = false;
+                            if existing.is_null() {
+                                gen.emit_main_return(0);
+                                continue;
+                            }
+                            let f = gen.perform_to_number(*existing);
+                            let i = gen.convert_float_to_i32(f);
+                            gen.emit_return(Some(&i));
+                        }
+                        Expression::VarArgs => todo!("var args..."),
+                        Expression::FunctionDef(_) => todo!(),
+                        Expression::TableCtor(_) => todo!(),
+                        Expression::BinOp { left, op, right } => {
+                            ret_zero = false;
+                            let success = emit_bin_op(gen, &*left, &*right, *op, &mut variables);
+                            let f = gen.perform_to_number(success);
+                            let i = gen.convert_float_to_i32(f);
+                            gen.emit_return(Some(&i));
+                        }
+                        Expression::UnaryOp { .. } => todo!("unop"),
+                        Expression::FuncCall(_) => todo!("FuncCall"),
+                        Expression::Suffixed(_) => todo!("Suffixed"),
+                    }
+                }
             }
             _ => unimplemented!("{stmt:?}"),
         }
     }
-    gen.emit_main_return();
+    if ret_zero {
+        gen.emit_main_return(0);
+    }
 }
 
 fn emit_assignment<'ctx>(
@@ -154,7 +192,10 @@ fn expression_to_ptr<'ctx>(
         Expression::False => gen.init_tvalue_bool(false, &name_if_const),
         Expression::True => gen.init_tvalue_bool(true, &name_if_const),
         Expression::Numeral(n) => {
-            let float: f32 = n.0.parse().expect("float value");
+            if let Ok(i) = n.0.parse::<i64>() {
+                return gen.init_tvalue_int(i, &name_if_const);
+            }
+            let float: f64 = n.0.parse().expect("float value");
             gen.init_tvalue_num(float, &name_if_const)
         }
         Expression::LiteralString(s) => gen.init_tvalue_string(&s.0, &name_if_const),
@@ -165,6 +206,7 @@ fn expression_to_ptr<'ctx>(
             *ptr
         }
         Expression::BinOp { left, op, right } => emit_bin_op(gen, left, right, *op, vars),
+        Expression::UnaryOp { op, exp } => emit_un_op(gen, exp, *op, vars),
         _ => unimplemented!("expression_to_ptr: {expr:?}"),
     }
 }
@@ -176,24 +218,23 @@ fn emit_bin_op<'ctx>(
     op: BinaryOperator,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
 ) -> PointerValue<'ctx> {
-    use tvalue_names::math::*;
-    let op_name = match op {
-        BinaryOperator::Add => ADD,
-        BinaryOperator::Subtract => SUB,
-        BinaryOperator::Multiply => MUL,
-        BinaryOperator::Divide => DIV,
-        BinaryOperator::FloorDivide => FLOOR_DIV,
-        BinaryOperator::Power => POW,
-        BinaryOperator::Modulo => MOD,
-        BinaryOperator::BitwiseAnd => AND,
-        BinaryOperator::BitwiseOr => OR,
-        BinaryOperator::RightShift => RSH,
-        BinaryOperator::LeftShift => LSH,
-        _ => unimplemented!("{op:?}"),
-    };
-    let lhs = expression_to_ptr(&gen, &*left, "lhs", vars);
-    let rhs = expression_to_ptr(&gen, &*right, "rhs", vars);
+    let op_name = CodeGenerator::binary_op_name(op);
+    let lhs = expression_to_ptr(&gen, left, "lhs", vars);
+    let rhs = expression_to_ptr(&gen, right, "rhs", vars);
     let dest = gen.alloca_tvalue("result");
-    let _success = gen.perform_binary_op("success", op_name, lhs, rhs, dest);
+    gen.perform_binary_op("success", op_name, lhs, rhs, dest);
+    dest
+}
+
+fn emit_un_op<'ctx>(
+    gen: &CodeGenerator<'ctx>,
+    exp: &Expression,
+    op: UnaryOperator,
+    vars: &mut HashMap<String, PointerValue<'ctx>>,
+) -> PointerValue<'ctx> {
+    let op_name = CodeGenerator::unary_op_name(op);
+    let lhs = expression_to_ptr(&gen, exp, "lhs", vars);
+    let dest = gen.alloca_tvalue("result");
+    gen.perform_unary_op("success", op_name, lhs, dest);
     dest
 }

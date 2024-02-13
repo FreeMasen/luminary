@@ -17,3 +17,7 @@
 /ee
 /ee.*
 /public
+.cargo/config.toml
+/libluminary_runtime.*
+/*.dll
+/*.lib
