@@ -77,9 +77,10 @@ jobs:
         directory: ${{ github.workspace }}/llvm
     - name: update llvm-sys env var (MacOS)
       if: runner.os == 'Macos'
-      run:  |
-         echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
-         brew reinstall gcc
+      run:  >
+        brew reinstall gcc &&
+        brew install --build-from-source zstd &&
+        echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
     - name: update llvm-sys env var (Linux)
       if: runner.os == 'Linux'
       run: |
