@@ -80,6 +80,7 @@ jobs:
       run:  >
         brew reinstall gcc &&
         brew install --build-from-source zstd &&
+        echo "DYLD_INSERT_LIBRARIES="$(brew --prefix zstd)/$(brew list --version zstd | tr ' ' '\n' | tail -1)"" >> "$GITHUB_ENV" &&
         echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
     - name: update llvm-sys env var (Linux)
       if: runner.os == 'Linux'
