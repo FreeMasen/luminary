@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 runtime-macros = { path = "../runtime-macros" }
+ryu = "1"
 
 [dev-dependencies]
 insta = "1.34"

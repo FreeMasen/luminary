@@ -4,9 +4,13 @@ use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
     context::ContextRef,
+    intrinsics::Intrinsic,
     module::Module,
-    types::{FloatType, IntType, VoidType},
-    values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue},
+    types::{FloatType, IntType, PointerType, VoidType},
+    values::{
+        AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue,
+        IntValue, PointerValue,
+    },
 };
 
 pub struct CodeGenerator<'ctx> {
@@ -27,8 +31,14 @@ struct ExpectedCtors<'ctx> {
 
 struct ExpectedHelpers<'ctx> {
     print: FunctionValue<'ctx>,
+    print_err_msg: FunctionValue<'ctx>,
     tvalue_size: FunctionValue<'ctx>,
+    get_tag: FunctionValue<'ctx>,
     to_number: FunctionValue<'ctx>,
+    is_truthy: FunctionValue<'ctx>,
+    to_string: FunctionValue<'ctx>,
+    assert: FunctionValue<'ctx>,
+    error: FunctionValue<'ctx>,
 }
 
 impl<'ctx> ExpectedCtors<'ctx> {
@@ -109,10 +119,15 @@ impl<'ctx> ExpectedHelpers<'ctx> {
                 .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
             None,
         );
+        let print_err_msg = module.add_function(
+            runtime::PRINT_ERROR_MESSAGE,
+            c.void_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+            None,
+        );
         let tvalue_size =
             module.add_function(runtime::SIZE, c.i32_type().fn_type(&[], false), None);
-        apply_attrs_to_function(&c, &print);
-        apply_attrs_to_function(&c, &tvalue_size);
+
         module.add_function(
             "printf",
             c.i32_type()
@@ -125,10 +140,42 @@ impl<'ctx> ExpectedHelpers<'ctx> {
                 .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
             None,
         );
+        let is_truthy = module.add_function(
+            runtime::IS_TRUTHY,
+            c.bool_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+            None,
+        );
+        let to_string = module.add_function(
+            runtime::TO_STRING,
+            c.void_type().fn_type(
+                &[
+                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.i8_type().ptr_type(Default::default()).into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        let get_tag = module.add_function(runtime::GET_TAG, c.i8_type().fn_type(&[
+            c.i8_type().ptr_type(Default::default()).into()
+        ], false), None);
+        apply_attrs_to_function(&c, &print);
+        apply_attrs_to_function(&c, &tvalue_size);
+        apply_attrs_to_function(&c, &to_number);
+        apply_attrs_to_function(&c, &is_truthy);
+        apply_attrs_to_function(&c, &to_string);
         Self {
             print,
+            print_err_msg,
             tvalue_size,
+            get_tag,
             to_number,
+            is_truthy,
+            to_string,
+            // to be back-filled in CodeGenerator::new
+            error: print,
+            assert: print,
         }
     }
 }
@@ -180,15 +227,134 @@ impl<'ctx> CodeGenerator<'ctx> {
             );
             apply_attrs_to_function(&context, &f);
         }
-        Self {
+        let mut ret = Self {
             context,
             module,
             builder,
             ctors,
             helpers,
-        }
+        };
+        ret.back_fill_helpers();
+        ret
     }
 
+    fn back_fill_helpers(&mut self) {
+        self.back_fill_error();
+        self.back_fill_assert();
+    }
+
+    fn back_fill_error(&mut self) {
+        let f = self.module.add_function("luminary::std::error", self.void_type().fn_type(
+                &[
+                    // msg
+                    self.ptr_type().into(),
+                    // level
+                    self.ptr_type().into(),
+                ],
+                false,
+            ), None);
+        let trap = Intrinsic::find("llvm.trap").expect("find trap");
+        let trap = trap.get_declaration(&self.module, &[]).expect("trap decl");
+        self.builder.position_at_end(self.context.append_basic_block(f, "entry"));
+        let first_param = f
+            .get_first_param()
+            .unwrap()
+            .as_any_value_enum()
+            .into_pointer_value();
+        first_param.set_name("message");
+        self.builder.build_call(self.helpers.print_err_msg, &[first_param.into()], "_");
+        self.builder.build_call(trap, &[], "_");
+        self.builder.build_return(None);
+        self.helpers.error = f;
+    }
+
+    fn back_fill_assert(&mut self) {
+        const DEFAULT_MSG: &[u8] = b"assertion failed!";
+        let f = self.module.add_function(
+            "luminary::assert",
+            self.void_type().fn_type(
+                &[
+                    // test
+                    self.ptr_type().into(),
+                    // msg (optional)
+                    self.ptr_type().into(),
+                ],
+                false,
+            ),
+            None,
+        );
+        self.builder.position_at_end(self.context.append_basic_block(f, "entry"));
+        let first_param = f
+            .get_first_param()
+            .unwrap()
+            .as_any_value_enum()
+            .into_pointer_value();
+        first_param.set_name("value");
+        let last_param = f
+            .get_nth_param(1)
+            .unwrap()
+            .as_any_value_enum()
+            .into_pointer_value();
+        last_param.set_name("message");
+        let default_msg = self.init_tvalue_string(DEFAULT_MSG, "default_msg");
+        let is_true = self.builder
+            .build_call(self.helpers.is_truthy, &[first_param.into()], "is_true")
+            .as_any_value_enum()
+            .into_int_value();
+
+        let should_trap = self.context.append_basic_block(f, "should_trap");
+        let exit = self.context.append_basic_block(f, "exit");
+        self.builder.build_conditional_branch(is_true, exit, should_trap);
+
+        self.builder.position_at_end(should_trap);
+        let is_null = self.builder.build_is_null(last_param, "is_null");
+
+        let arg_null = self.context.append_basic_block(f, "arg_null");
+        let arg_nn = self.context.append_basic_block(f, "arg_nn");
+        let arg_nil = self.context.append_basic_block(f, "arg_nil");
+        let trap = self.context.append_basic_block(f, "trap");
+        self.builder.build_conditional_branch(is_null, arg_null, arg_nn);
+
+        self.builder.position_at_end(arg_null);
+        self.builder.build_unconditional_branch(trap);
+
+        self.builder.position_at_end(arg_nn);
+        let tag = self.builder.build_call(self.helpers.get_tag, &[
+            last_param.into()
+        ], "tag").as_any_value_enum().into_int_value();
+        let arg_is_nil = self.builder.build_int_compare(inkwell::IntPredicate::EQ, tag, self.const_u8(0), "arg_is_nil");
+
+        self.builder.build_conditional_branch(arg_is_nil, arg_nil, trap);
+        
+        self.builder.position_at_end(arg_nil);
+        self.builder.build_unconditional_branch(trap);
+
+        self.builder.position_at_end(trap);
+        let msg = self.builder.build_phi(self.ptr_type(), "msg");
+        
+        msg.add_incoming(&[(&last_param, arg_nn), (&default_msg, arg_null), (&default_msg, arg_nil)]);
+        let msg = msg.as_any_value_enum().into_pointer_value();
+        self.builder.build_call(
+            self.helpers.error,
+            &[
+                msg.into(),
+                // TODO: set this to TValue(0)...
+                self
+                    .ptr_type()
+                    .const_null()
+                    .into(),
+            ],
+            "error",
+        );
+        // will never execute but llvm can't figure that out
+        self.builder.build_unconditional_branch(exit);
+
+        self.builder.position_at_end(exit);
+        self.builder.build_return(None);
+        self.helpers.assert = f;
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn emit_main_and_move_to_entry(&self) {
         let f = self
             .module
@@ -203,20 +369,27 @@ impl<'ctx> CodeGenerator<'ctx> {
         apply_attrs_to_function(&self.context, f);
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn into_module(self) -> Module<'ctx> {
         self.module
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn emit_main_return(&self, value: i32) {
         self.emit_return(Some(&self.const_i32(value)));
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn emit_return(&self, v: Option<&dyn BasicValue<'ctx>>) {
         self.builder.build_return(v);
     }
 
     pub fn void_type(&self) -> VoidType<'ctx> {
         self.context.void_type()
+    }
+
+    pub fn ptr_type(&self) -> PointerType<'ctx> {
+        self.context.i8_type().ptr_type(Default::default())
     }
 
     pub fn i8_type(&self) -> IntType<'ctx> {
@@ -289,6 +462,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
     /// Generate code that will emit a single alloca for the tvalue base type setting all values
     /// to their defaults (all 0)
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn alloca_tvalue(&self, name: &str) -> PointerValue<'ctx> {
         let size = self
             .builder
@@ -300,6 +474,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         ptr
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn alloca_str(&self, value: &[u8], name: &str) -> PointerValue<'ctx> {
         let ptr = self.builder.build_array_alloca(
             self.i8_type(),
@@ -311,6 +486,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         ptr
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn init_tvalue_bool(&self, value: bool, name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let init = self.const_bool(value);
@@ -319,7 +495,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         alloca
     }
 
-    /// Generate code
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn init_tvalue_num(&self, value: f64, name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
         if value == value.trunc() {
@@ -333,6 +509,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         }
         alloca
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn init_tvalue_int(&self, value: i64, name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let init = self.const_i64(value);
@@ -341,6 +519,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         alloca
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn init_tvalue_string(&self, value: &[u8], name: &str) -> PointerValue<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let capacity = self.const_u32(value.len() as _);
@@ -356,6 +535,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     /// generate code that will perform a uniary math operation placing the result in the `dest` pointer
     ///
     /// Returns the `IntValue` indicating if the operation was successful
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn perform_unary_op(
         &self,
         success_name: &str,
@@ -374,6 +554,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     /// generate code that will perform a binary math operation placing the result in the `dest` pointer
     ///
     /// Returns the `IntValue` indicating if the operation was successful
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn perform_binary_op(
         &self,
         success_name: &str,
@@ -390,11 +571,35 @@ impl<'ctx> CodeGenerator<'ctx> {
             .build_call(op_fn, &[lhs.into(), rhs.into(), dest.into()], success_name);
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn perform_print(&self, value: PointerValue<'ctx>) {
         self.builder
             .build_call(self.helpers.print, &[value.into()], "_");
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn perform_assert(
+        &self,
+        value: PointerValue<'ctx>,
+        msg: PointerValue<'ctx>,
+    ) -> PointerValue<'ctx> {
+        self.builder
+            .build_call(self.helpers.assert, &[value.into(), msg.into()], "_");
+        value
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn perform_error(
+        &self,
+        value: PointerValue<'ctx>,
+        level: PointerValue<'ctx>,
+    ) -> PointerValue<'ctx> {
+        self.builder
+            .build_call(self.helpers.error, &[value.into(), level.into()], "_");
+        value
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn perform_to_number(&self, value: PointerValue<'ctx>) -> FloatValue<'ctx> {
         self.builder
             .build_call(self.helpers.to_number, &[value.into()], "_")
@@ -402,11 +607,25 @@ impl<'ctx> CodeGenerator<'ctx> {
             .into_float_value()
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn perform_to_string(
+        &self,
+        value: PointerValue<'ctx>,
+        dest: PointerValue<'ctx>,
+    ) -> IntValue<'ctx> {
+        self.builder
+            .build_call(self.helpers.to_string, &[value.into(), dest.into()], "_")
+            .as_any_value_enum()
+            .into_int_value()
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn convert_float_to_i32(&self, value: FloatValue<'ctx>) -> IntValue<'ctx> {
         self.builder
             .build_float_to_signed_int(value, self.i32_type(), "_")
     }
 
+    #[tracing::instrument(level = "trace")]
     pub fn binary_op_name(op: BinaryOperator) -> &'static str {
         use BinaryOperator::*;
         match op {
@@ -433,6 +652,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             Or => todo!(),
         }
     }
+
+    #[tracing::instrument(level = "trace")]
     pub fn unary_op_name(op: UnaryOperator) -> &'static str {
         use UnaryOperator::*;
         match op {
@@ -440,6 +661,31 @@ impl<'ctx> CodeGenerator<'ctx> {
             Not => todo!(),
             Length => todo!(),
             BitwiseNot => runtime::math::BIN_NOT,
+        }
+    }
+
+    pub fn apply_debug_prints(&self) {
+        let printf = self.module.get_function("printf").unwrap();
+        for f in self.module.get_functions() {
+            let fn_name = f.get_name().to_string_lossy();
+            for (i, bb) in f.get_basic_blocks().into_iter().enumerate() {
+                let fmt = self.alloca_str(&[0u8; 255], "fmt");
+                self.builder
+                    .position_before(&bb.get_first_instruction().unwrap());
+                if i == 0 {
+                    self.builder.build_store(
+                        fmt,
+                        self.const_string(format!("{}\n\0", fn_name).as_bytes()),
+                    );
+                } else {
+                    let bb_name = bb.get_name().to_string_lossy();
+                    self.builder.build_store(
+                        fmt,
+                        self.const_string(&format!("{}::{}\n\0", fn_name, bb_name).as_bytes()),
+                    );
+                };
+                self.builder.build_call(printf, &[fmt.into()], "_");
+            }
         }
     }
 }

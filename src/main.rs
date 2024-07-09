@@ -32,6 +32,8 @@ struct Args {
     location: Vec<PathBuf>,
     #[arg(long, short = 'l')]
     library: Vec<String>,
+    #[arg(long, short)]
+    force: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -71,6 +73,8 @@ impl Display for FileType {
 }
 
 fn main() {
+    env_logger::init();
+
     let Args {
         input,
         output,
@@ -79,10 +83,25 @@ fn main() {
         runtime_location,
         library,
         location,
+        force,
     } = Args::parse();
+    tracing::warn!("ARGS: {}", input.display());
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
-    module.verify().unwrap();
+    module.verify().unwrap_or_else(|e| {
+        if std::env::var("LUMINARY_DEBUG_OUTPUT_LL")
+            .map(|v| v != "0")
+            .unwrap_or(false)
+        {
+            let mut dest = get_dest(output.as_ref());
+            dest.write_all(module.to_string().as_bytes()).unwrap();
+        }
+        if !force {
+            panic!("Failed to run {e}");
+        } else {
+            eprintln!("Warning invalid llvm module produced: `{e}`");
+        }
+    });
     match filetype {
         FileType::Ll => {
             let mut dest = get_dest(output.as_ref());

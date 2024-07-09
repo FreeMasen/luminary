@@ -320,6 +320,92 @@ pub unsafe extern "C" fn is_truthy(ptr: *mut TValue) -> bool {
 }
 
 #[runtime_macros::std_tvalue_export]
+pub unsafe extern "C" fn to_string(ptr: *mut TValue, out: *mut TValue) {
+    static mut BUF: &mut [u8] = &mut [0; 255];
+    let arg = get_mut_or_return!(ptr);
+    match arg.tag {
+        0 => {
+            static mut NIL: &mut [u8] = &mut [b'n', b'i', b'l'];
+            init_str(out, 3, NIL.as_mut_ptr())
+        }
+        tags::BOOLEAN => {
+            static mut TRUE: &mut [u8] = &mut [b't', b'r', b'u', b'e'];
+            static mut FALSE: &mut [u8] = &mut [b'f', b'a', b'l', b's', b'e'];
+            if arg.value.b {
+                init_str(out, TRUE.len() as _, TRUE.as_mut_ptr())
+            } else {
+                init_str(out, FALSE.len() as _, FALSE.as_mut_ptr())
+            }
+        }
+        tags::INTEGER => {
+            let len = write_int_to(arg.value.i, BUF);
+            let slice = &mut BUF[..len];
+            init_str(out, slice.len() as _, slice.as_mut_ptr());
+        }
+        tags::FLOAT => {
+            let v = arg.value.f;
+            let len = ryu::raw::format64(v, BUF.as_mut_ptr());
+            init_str(out, len as _, (&mut BUF[..len]).as_mut_ptr());
+        }
+        tags::STRING_CONST => core::ptr::copy(ptr, out, 1),
+        _ => {
+            for (i, ch) in "table: 0x".chars().enumerate() {
+                BUF[i] = ch as u8;
+            };
+            let len = write_int_to(ptr as _, BUF);
+            init_str(out, len as _, (&mut BUF[..len]).as_mut_ptr());
+        },
+    }
+}
+
+fn write_int_to(mut v: i64, buf: &mut [u8]) -> usize {
+    let mut len = if v.is_negative() {
+        buf[0] = b'-';
+        1
+    } else {
+        0
+    };
+    let mut rev = [0u8; 255];
+    let mut i = 0;
+    while v > 0 {
+        match v % 10 {
+            1 => rev[i] = b'1',
+            2 => rev[i] = b'2',
+            3 => rev[i] = b'3',
+            4 => rev[i] = b'4',
+            5 => rev[i] = b'5',
+            6 => rev[i] = b'6',
+            7 => rev[i] = b'7',
+            8 => rev[i] = b'8',
+            9 => rev[i] = b'9',
+            _ => rev[i] = b'0',
+        }
+        v /= 10;
+        i += 1;
+    }
+    for &ch in rev[..i].into_iter().rev() {
+        buf[len] = ch;
+        len += 1;
+    }
+    len
+}
+
+#[runtime_macros::std_tvalue_export]
+pub unsafe extern "C" fn print_error_message(ptr: *mut TValue) {
+    const ERROR_MSG_NIL: &str = "(error object is a nil value)";
+    
+    let Some(v) = ptr.as_ref() else {
+        println!("{ERROR_MSG_NIL}");
+        return;
+    };
+    if v.tag == tags::NIL {
+        println!("{ERROR_MSG_NIL}");
+        return;
+    }
+    println(ptr);
+}
+
+#[runtime_macros::std_tvalue_export]
 pub unsafe extern "C" fn get_tag(ptr: *mut TValue) -> u8 {
     let Some(v) = ptr.as_ref() else {
         return 0;
@@ -371,4 +457,54 @@ mod tests {
             TValue::new_str(s),
         ])
     }
+
+    // #[test]
+    // fn assert_positive() {
+    //     static mut HW: &mut [u8] = &mut [
+    //         b'h', b'e', b'l', b'l', b'o', b' ', b'w', b'o', b'r', b'l', b'd', b'!',
+    //     ];
+    //     let s: &'static mut str = core::str::from_utf8_mut(unsafe { HW }).unwrap();
+    //     unsafe {
+    //         assert(&mut TValue::new_bool(true), &mut TValue::new_nil());
+    //         assert(&mut TValue::new_str(s), &mut TValue::new_nil());
+    //         assert(&mut TValue::new_float(0.1), std::ptr::null_mut());
+    //         assert(&mut TValue::new_int(1), &mut TValue::new_nil());
+    //     }
+    // }
+
+    // #[test]
+    // #[should_panic = "assertion failed!"]
+    // fn assert_neg_bool_no_msg() {
+    //     unsafe {
+    //         assert(&mut TValue::new_bool(false), std::ptr::null_mut());
+    //     }
+    // }
+
+    // #[test]
+    // #[should_panic = "assertion failed!"]
+    // fn assert_neg_bool_no_msg2() {
+    //     unsafe {
+    //         assert(&mut TValue::new_bool(false), &mut TValue::new_nil());
+    //     }
+    // }
+
+    // #[test]
+    // #[should_panic = "assertion failed!"]
+    // fn assert_neg_nil_no_msg() {
+    //     unsafe {
+    //         assert(&mut TValue::new_bool(false), &mut TValue::new_nil());
+    //     }
+    // }
+
+    // #[test]
+    // #[should_panic = "error found!"]
+    // fn assert_neg_nil_msg() {
+    //     static mut HW: &mut [u8] = &mut [
+    //         b'e', b'r', b'r', b'o', b'r', b' ', b'f', b'o', b'u', b'n', b'd', b'!',
+    //     ];
+    //     let s: &'static mut str = core::str::from_utf8_mut(unsafe { HW }).unwrap();
+    //     unsafe {
+    //         assert(&mut TValue::new_bool(false), &mut TValue::new_str(s));
+    //     }
+    // }
 }

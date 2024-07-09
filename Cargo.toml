@@ -9,12 +9,16 @@ description = "A compiler for lua."
 [dependencies]
 analisar = "0.2"
 clap = { version = "4.4", features = ["derive"] }
+env_logger = "0.11"
 inkwell = { version = "0.2", features = ["llvm16-0"] }
 lex_lua = "0.1.9"
 runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features = [
     "names",
 ] }
 tempfile = "3.8"
+tracing = { version = "0.1", features = ["log-always"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+log = "0.4"
 
 [dev-dependencies]
 escargot = "0.5"

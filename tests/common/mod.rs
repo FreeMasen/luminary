@@ -1,6 +1,7 @@
 use std::{
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
+    time::SystemTime,
 };
 
 use escargot::format::Message;
@@ -69,11 +70,11 @@ pub fn setup(name: &str) -> TestConfig {
     let static_runtime = static_path.expect("Didn't generate a static runtime");
     let base_dir = PathBuf::from(TEMP_DIR).join(name);
     let slib = base_dir.join("slib");
-    let _ = std::fs::create_dir_all(&slib);
+    std::fs::create_dir_all(&slib).unwrap();
     let dynamic_dest = slib.join(dynamic_runtime.file_name().unwrap());
     std::fs::copy(dynamic_runtime, &dynamic_dest).unwrap();
     let lib = base_dir.join("lib");
-    let _ = std::fs::create_dir_all(&lib);
+    std::fs::create_dir_all(&lib).unwrap();
     let static_dest = lib.join(static_runtime.file_name().unwrap());
     std::fs::copy(static_runtime, &static_dest).unwrap();
 
@@ -90,6 +91,39 @@ impl TestConfig {
         let lua_path = self.base_dir.join("main.lua");
         std::fs::write(&lua_path, lua).unwrap();
         let out_path = self.base_dir.join("app");
+        let target_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("llvm");
+        std::fs::create_dir_all(&target_dir).ok();
+        let file_name = std::thread::current()
+            .name()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| {
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    .to_string()
+            });
+        let debug_path = target_dir.join(format!("{file_name}.ll"));
+
+        let cmd = Command::new(&self.cmd)
+            .arg(&lua_path)
+            .arg("-r")
+            .arg(&self.static_runtime.parent().unwrap())
+            .arg("-o")
+            .arg(&debug_path)
+            .arg("--filetype")
+            .arg("ll")
+            .spawn()
+            .unwrap()
+            .wait_with_output()
+            .unwrap();
+        if !cmd.status.success() {
+            eprintln!("Failed to execute debug cmd");
+            eprintln!("OUT: {}", String::from_utf8_lossy(&cmd.stdout));
+            eprintln!("ERR: {}", String::from_utf8_lossy(&cmd.stderr));
+        }
         let cmd = Command::new(&self.cmd)
             .arg(&lua_path)
             .arg("-r")
@@ -148,11 +182,16 @@ impl TestConfig {
             );
         }
         #[cfg(target_os = "macos")]
-        cmd.env(
-            "DYLD_FALLBACK_LIBRARY_PATH",
-            self.dynamic_runtime.parent().unwrap(),
-        );
-
+        {
+            println!(
+                "setting DYLD_FALLBACK_LIBRARY_PATH=`{}`",
+                self.dynamic_runtime.parent().unwrap().display()
+            );
+            cmd.env(
+                "DYLD_FALLBACK_LIBRARY_PATH",
+                self.dynamic_runtime.parent().unwrap(),
+            );
+        }
         cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
