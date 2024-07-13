@@ -1,12 +1,12 @@
-use core::fmt;
-use std::{backtrace::Backtrace, collections::HashMap, path::PathBuf};
-
 use analisar::{
     ast::{BinaryOperator, Expression, FunctionCall, Statement, UnaryOperator},
     Parser,
 };
+use bstr::ByteSlice;
 use codegen::CodeGenerator;
+use core::fmt;
 use inkwell::{context::Context, module::Module, values::PointerValue};
+use std::{backtrace::Backtrace, collections::HashMap, path::PathBuf};
 pub mod bytecode;
 pub mod codegen;
 
@@ -66,10 +66,10 @@ pub fn emit_code<'ctx>(generator: &CodeGenerator<'ctx>, lua: String) {
                 }
             }
             Statement::Expression(Expression::FuncCall(call)) => {
-                let _success = emit_fn_call(generator, &call, &mut variables);
+                let _success = emit_fn_call(generator, &call, &mut variables, "");
             }
             Statement::Expression(Expression::BinOp { left, op, right }) => {
-                let _success = emit_bin_op(generator, &*left, &*right, op, &mut variables);
+                let _success = emit_bin_op(generator, &*left, &*right, op, &mut variables, "");
             }
             Statement::Return(ret) => {
                 if let Some(first) = ret.0.first() {
@@ -121,7 +121,7 @@ pub fn emit_code<'ctx>(generator: &CodeGenerator<'ctx>, lua: String) {
                         Expression::BinOp { left, op, right } => {
                             ret_zero = false;
                             let success =
-                                emit_bin_op(generator, &*left, &*right, *op, &mut variables);
+                                emit_bin_op(generator, &*left, &*right, *op, &mut variables, "_");
                             let f = generator.perform_to_number(success);
                             let i = generator.convert_float_to_i32(f);
                             generator.emit_return(Some(&i));
@@ -129,7 +129,7 @@ pub fn emit_code<'ctx>(generator: &CodeGenerator<'ctx>, lua: String) {
                         Expression::UnaryOp { .. } => todo!("unop"),
                         Expression::FuncCall(inner) => {
                             ret_zero = false;
-                            let ret = emit_fn_call(generator, inner, &mut variables);
+                            let ret = emit_fn_call(generator, inner, &mut variables, "");
                             let f = generator.perform_to_number(ret);
                             let i = generator.convert_float_to_i32(f);
                             generator.emit_return(Some(&i));
@@ -150,13 +150,14 @@ fn emit_fn_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    name_if_const: &str,
 ) -> PointerValue<'ctx> {
     let name = expression_to_name(&call.prefix);
     match name.as_str() {
-        "print" => emit_print_call(generator, call, vars),
-        "assert" => emit_assert_call(generator, call, vars),
-        "error" => emit_error_call(generator, call, vars),
-        "to_string" => emit_to_string_call(generator, call, vars),
+        "print" => emit_print_call(generator, call, vars, name_if_const),
+        "assert" => emit_assert_call(generator, call, vars, name_if_const),
+        "error" => emit_error_call(generator, call, vars, name_if_const),
+        "tostring" => emit_to_string_call(generator, call, vars, name_if_const),
         _ => todo!("`{}` is unimplemented", name),
     }
 }
@@ -165,20 +166,21 @@ fn emit_print_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    name_if_const: &str,
 ) -> PointerValue<'ctx> {
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
             let ptr = expression_to_ptr(
                 &generator,
                 exprs.first().unwrap_or(&Expression::Nil),
-                "_",
+                name_if_const,
                 vars,
             );
             generator.perform_print(ptr);
         }
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
         analisar::ast::Args::String(lit) => {
-            let ptr = generator.init_tvalue_string(&lit.0, "_");
+            let ptr = generator.init_tvalue_string(&lit.0, name_if_const);
             generator.perform_print(ptr);
         }
     }
@@ -192,6 +194,7 @@ fn emit_error_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    _name_if_const: &str
 ) -> PointerValue<'ctx> {
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
@@ -217,6 +220,7 @@ fn emit_assert_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    name_if_const: &str
 ) -> PointerValue<'ctx> {
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
@@ -224,7 +228,7 @@ fn emit_assert_call<'ctx>(
             let msg = exprs.get(1).unwrap_or(&Expression::Nil);
             let v = expression_to_ptr(&generator, v, "_", vars);
             let msg = expression_to_ptr(&generator, msg, "_", vars);
-            generator.perform_assert(v, msg)
+            generator.perform_assert(v, msg, name_if_const)
         }
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
         analisar::ast::Args::String(lit) => {
@@ -233,7 +237,7 @@ fn emit_assert_call<'ctx>(
                 .i8_type()
                 .ptr_type(Default::default())
                 .const_null();
-            generator.perform_assert(v, msg)
+            generator.perform_assert(v, msg, name_if_const)
         }
     }
 }
@@ -242,8 +246,9 @@ fn emit_to_string_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    name_if_const: &str
 ) -> PointerValue<'ctx> {
-    let dest = generator.alloca_tvalue("");
+    let dest = generator.alloca_tvalue(name_if_const);
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
             let v = exprs.first().unwrap_or(&Expression::Nil);
@@ -252,7 +257,7 @@ fn emit_to_string_call<'ctx>(
         }
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
         analisar::ast::Args::String(lit) => {
-            generator.init_tvalue_string(&lit.0, "_");
+            generator.init_tvalue_string(&lit.0, name_if_const);
         }
     }
     dest
@@ -264,7 +269,9 @@ fn emit_assignment<'ctx>(
     init: Option<&Expression>,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
 ) -> PointerValue<'ctx> {
+    tracing::debug!("emit_assignment {target:?}");
     let name = expression_to_name(target);
+    tracing::debug!("emit_assignment `{name}` {init:?}");
     let Some(init) = init else {
         let ptr = generator.alloca_tvalue(&name);
         vars.insert(name, ptr);
@@ -299,16 +306,21 @@ fn expression_to_ptr<'ctx>(
             let float: f64 = n.0.parse().expect("float value");
             generator.init_tvalue_num(float, &name_if_const)
         }
-        Expression::LiteralString(s) => generator.init_tvalue_string(&s.0, &name_if_const),
+        Expression::LiteralString(s) => generator.init_tvalue_string(
+            &s.0.trim_with(|ch: char| ch == '"' || ch == '\''),
+            &name_if_const,
+        ),
         Expression::Name(n) => {
             let Some(ptr) = vars.get(&n.name[..]) else {
                 panic!("unknown variable {n:?}");
             };
             *ptr
         }
-        Expression::BinOp { left, op, right } => emit_bin_op(generator, left, right, *op, vars),
-        Expression::UnaryOp { op, exp } => emit_un_op(generator, exp, *op, vars),
-        Expression::FuncCall(inner) => emit_fn_call(generator, inner, vars),
+        Expression::BinOp { left, op, right } => {
+            emit_bin_op(generator, left, right, *op, vars, &name_if_const)
+        }
+        Expression::UnaryOp { op, exp } => emit_un_op(generator, exp, *op, vars, &name_if_const),
+        Expression::FuncCall(inner) => emit_fn_call(generator, inner, vars, &name_if_const),
         _ => unimplemented!("expression_to_ptr: {expr:?}"),
     }
 }
@@ -319,11 +331,12 @@ fn emit_bin_op<'ctx>(
     right: &Expression,
     op: BinaryOperator,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    name_if_const: &str,
 ) -> PointerValue<'ctx> {
     let op_name = CodeGenerator::binary_op_name(op);
     let lhs = expression_to_ptr(&generator, left, "lhs", vars);
     let rhs = expression_to_ptr(&generator, right, "rhs", vars);
-    let dest = generator.alloca_tvalue("result");
+    let dest = generator.alloca_tvalue(name_if_const);
     generator.perform_binary_op("success", op_name, lhs, rhs, dest);
     dest
 }
@@ -333,10 +346,11 @@ fn emit_un_op<'ctx>(
     exp: &Expression,
     op: UnaryOperator,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
+    name_if_const: &str,
 ) -> PointerValue<'ctx> {
     let op_name = CodeGenerator::unary_op_name(op);
     let lhs = expression_to_ptr(&generator, exp, "lhs", vars);
-    let dest = generator.alloca_tvalue("result");
+    let dest = generator.alloca_tvalue(name_if_const);
     generator.perform_unary_op("success", op_name, lhs, dest);
     dest
 }

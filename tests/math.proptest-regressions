@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 1d177b9166443f72a8d959a4c88bd9d9b7de56f4ea0cf99a71b2e598858add25 # shrinks to l = 0, r = 0
+cc 3a38d54f6a9942f7796b1b324036ed4019e023c9b122b388707f3d5c76ea8620 # shrinks to l = -2, r = 55

@@ -266,7 +266,7 @@ pub unsafe extern "C" fn size() -> u32 {
 #[runtime_macros::std_tvalue_export]
 pub unsafe extern "C" fn println(ptr: *const TValue) {
     let Some(val) = ptr.as_ref() else {
-        println!();
+        println!("<null-ptr>");
         return;
     };
     println!("{val}");
@@ -351,13 +351,14 @@ pub unsafe extern "C" fn to_string(ptr: *mut TValue, out: *mut TValue) {
         _ => {
             for (i, ch) in "table: 0x".chars().enumerate() {
                 BUF[i] = ch as u8;
-            };
+            }
             let len = write_int_to(ptr as _, BUF);
             init_str(out, len as _, (&mut BUF[..len]).as_mut_ptr());
-        },
+        }
     }
 }
 
+#[cfg(feature = "runtime")]
 fn write_int_to(mut v: i64, buf: &mut [u8]) -> usize {
     let mut len = if v.is_negative() {
         buf[0] = b'-';
@@ -393,13 +394,14 @@ fn write_int_to(mut v: i64, buf: &mut [u8]) -> usize {
 #[runtime_macros::std_tvalue_export]
 pub unsafe extern "C" fn print_error_message(ptr: *mut TValue) {
     const ERROR_MSG_NIL: &str = "(error object is a nil value)";
-    
+    let th = std::thread::current();
+    let prefix = th.name().unwrap_or_default();
     let Some(v) = ptr.as_ref() else {
-        println!("{ERROR_MSG_NIL}");
+        println!("{prefix}{ERROR_MSG_NIL}");
         return;
     };
     if v.tag == tags::NIL {
-        println!("{ERROR_MSG_NIL}");
+        println!("{prefix}{ERROR_MSG_NIL}");
         return;
     }
     println(ptr);
@@ -411,6 +413,20 @@ pub unsafe extern "C" fn get_tag(ptr: *mut TValue) -> u8 {
         return 0;
     };
     v.tag
+}
+
+#[runtime_macros::std_tvalue_export(module = "ops")]
+pub unsafe extern "C" fn equals(lhs: *mut TValue, rhs: *mut TValue, out: *mut TValue) {
+    let Some(lhs) = lhs.as_ref() else {
+        return;
+    };
+    let Some(rhs) = rhs.as_ref() else {
+        return;
+    };
+    let Some(out) = out.as_mut() else {
+        return;
+    };
+    *out = TValue::new_bool(lhs == rhs)
 }
 
 #[macro_export]

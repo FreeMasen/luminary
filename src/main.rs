@@ -26,7 +26,7 @@ struct Args {
     filetype: FileType,
     #[arg(long, short = 'O', default_value_t = 0)]
     opt: u8,
-    #[arg(long, short)]
+    #[arg(long = "runtime", short)]
     runtime_location: Option<PathBuf>,
     #[arg(long, short = 'L')]
     location: Vec<PathBuf>,
@@ -85,7 +85,7 @@ fn main() {
         location,
         force,
     } = Args::parse();
-    tracing::warn!("ARGS: {}", input.display());
+    tracing::warn!("ARGS: {}, {runtime_location:?}", input.display());
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
     module.verify().unwrap_or_else(|e| {

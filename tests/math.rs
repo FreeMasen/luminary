@@ -1,419 +1,138 @@
-use std::process::Command;
+use std::{fmt, str::FromStr};
 
+use common::check_test;
+use proptest::test_runner::TestCaseError;
 mod common;
 
 #[test]
-fn add_static() {
-    let lua = r#"return 1 + 1"#;
-    let test = common::setup("add_static");
-    let bin_path = test.build_static(lua);
-    println!("Executing add binary");
-    let exec = Command::new(bin_path)
-        .spawn()
-        .unwrap()
-        .wait_with_output()
-        .unwrap();
-    assert_eq!(exec.status.code(), Some(2));
-}
-
-#[test]
-fn add_dynamic() {
+fn add() {
     let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
     proptest::proptest!(|(l: i64, r: i64)| {
-        // Because mlua doesn't allow for capturing the output
-        // of a function, we need to evaluate these operations
-        // slightly differently, for the mlua, we are just using
-        // the expression wrapped in parens but for the binary
-        // test we are using the print function to output our
-        // value to stdout and then we parse that.
-        let expr = format!("({l}+{r})");
-        let script = format!("print{expr}");
-
-        let expected = lua
-            .load(&expr).eval().map(|v: i64| {
-            v
-        }).unwrap_or(0);
-        let test = common::setup("add_dynamic");
-        let bin_path = test.build_dynamic(&script);
-        let exec = test.run_dynamic(&bin_path);
-        let stdout = String::from_utf8_lossy(&exec.stdout);
-        if !exec.status.success() {
-            panic!("Failed to exec bin:\n{}\n{stdout}", String::from_utf8_lossy(&exec.stderr));
-        }
-        let v_str = stdout.lines().next().expect(">= 1 line");
-        let v: i64 = v_str.parse().unwrap();
-        if v.to_string() != v_str {
-            eprintln!("Error paring:\ns: {v_str}\ni: {v}")
-        } else {
-            proptest::prop_assert_eq!(expected, v);
-        }
+        math_prop_test_integer::<i64>(l, r, "+", &lua, &thread_name).unwrap();
     });
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::TValue;
+#[test]
+fn sub() {
+    let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64, r: i64)| {
+        math_prop_test_integer::<i64>(l, r, "-", &lua, &thread_name).unwrap();
+    });
+}
 
-//     #[test]
-//     fn int_add() {
+#[test]
+fn mul() {
+    let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64, r: i64)| {
+        math_prop_test_integer::<i64>(l, r, "*", &lua, &thread_name).unwrap();
+    });
+}
 
-//     }
+#[test]
+fn div() {
+    let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64, r: i64)| {
+        if r == 0 {
+            return Ok(())
+        }
+        math_prop_test_integer::<f64>(l, r, "/", &lua, &thread_name).unwrap();
+    });
+}
 
-//     #[test]
-//     fn float_add() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{}+{}", l, r)).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
+#[test]
+fn floor_div() {
+    let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64, r: i64)| {
+        if r == 0 {
+            return Ok(())
+        }
+        math_prop_test_integer::<f64>(l, r, "//", &lua, &thread_name).unwrap()
+    });
+}
 
-//             unsafe {
-//                 crate::math::add(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
+#[test]
+fn pow() {
+    let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64, r: i64)| {
+        math_prop_test_integer::<f64>(l, r, "^", &lua, &thread_name).unwrap()
+    });
+}
 
-//     #[test]
-//     fn int_neg() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("-({})", l)).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
+#[test]
+fn rem() {
+    let lua = mlua::Lua::new();
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64, r: i64)| {
+        if r == 0 {
+            return Ok(())
+        }
+        math_prop_test_integer::<f64>(l, r, "%", &lua, &thread_name).unwrap()
+    });
+}
 
-//             unsafe {
-//                 crate::math::neg(&mut lhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
+fn math_prop_test_integer<'lua, R>(
+    lhs: i64,
+    rhs: i64,
+    op: &str,
+    l: &'lua mlua::Lua,
+    name: &str,
+) -> Result<(), TestCaseError> 
+where R: Copy + FromStr + ToString + PartialEq + fmt::Display + fmt::Debug + Default + mlua::FromLua<'lua>,
+    <R as FromStr>::Err: fmt::Display + fmt::Debug
+{
+    // Because mlua doesn't allow for capturing the output
+    // of a function (print statements), we need to evaluate these operations
+    // slightly differently, for the mlua, we are just using
+    // the expression wrapped in parens but for the binary
+    // test we are using the print function to output our
+    // value to stdout and then we parse that.
+    let expr = format!("({lhs}{op}({rhs}))");
+    let script = format!("print{expr}");
+    let name = format!("{name}_{lhs}_{rhs}");
+    let test = common::setup(name.as_str());
+    let expected: R = l
+            .load(&expr).eval().map(|v: R| {
+            v
+        }).unwrap_or_default();
+    let (d, s) = test.run_lua(&script);
+    check_test(&d);
+    check_test(&s);
+    let (v1, v_str1) = convert_stdout(&d.stdout).unwrap();
+    let (v2, v_str2) = convert_stdout(&s.stdout).unwrap();
+    check_converted(v1, expected, &v_str1)?;
+    check_converted(v2, expected, &v_str2)?;
+    Ok(())
+}
 
-//     #[test]
-//     fn float_neg() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("-({})", l)).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
 
-//             unsafe {
-//                 crate::math::neg(&mut lhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
+fn convert_stdout<T>(stdout: &[u8]) -> Result<(T, String), TestCaseError> 
+where T: FromStr, <T as FromStr>::Err: fmt::Display + fmt::Debug
+{
+    let stdout = String::from_utf8_lossy(stdout);
+    let v_str = stdout.lines().next().expect(">= 1 line");
+    let v = match v_str.parse::<T>() {
+        Ok(v) => v,
+        Err(e) => {
+            proptest::prop_assert!(false, "Failed to parse `{}`: {}", v_str, e);
+            panic!();
+        }
+    };
+    Ok((v, v_str.to_string()))
+}
 
-//     #[test]
-//     fn int_sub() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("({})-({})", l, r)).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::sub(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn float_sub() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("({})-({})", l, r)).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::sub(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn int_mul() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{}*{}", l, r)).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::mul(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn float_mul() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{}*{}", l, r)).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::mul(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn int_div() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{}/{}", l, r)).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::div(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn float_div() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-//             unsafe {
-//                 crate::math::div(&mut lhs, &mut rhs, &mut result);
-//             }
-//             let expected = lua.load(format!("{}/{}", l, r, )).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             if !(expected.is_nan() && result.is_nan()) {
-//                 proptest::prop_assert_eq!(&expected, &result, "{:?} / {:?} != {:?} found {:?}",
-//                     lhs, rhs, expected, result,
-//                 );
-//             }
-//         });
-//     }
-
-//     #[test]
-//     fn int_floor_div() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{}//{}", l, r)).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::floor_div(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn float_floor_div() {
-//         let lua = mlua::Lua::new();
-
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-
-//             unsafe {
-//                 crate::math::floor_div(&mut lhs, &mut rhs, &mut result);
-//             }
-
-//             let expected = lua.load(format!("{}//{}", l, r, )).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             if !(expected.is_nan() && result.is_nan()) {
-//                 proptest::prop_assert_eq!(&expected, &result, "{:?} // {:?} != {:?} found {:?}",
-//                     lhs, rhs, expected, result,
-//                 );
-//             }
-//         });
-//     }
-
-//     #[test]
-//     fn int_rem() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{}%{}", l, r)).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::rem(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(&expected, &result, "{} % {} != {} ({})", lhs, rhs, expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn float_rem() {
-//         let lua = mlua::Lua::new();
-
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-
-//             unsafe {
-//                 crate::math::rem(&mut lhs, &mut rhs, &mut result);
-//             }
-
-//             let expected = lua.load(format!("{}%{}", l, r, )).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             if !(expected.is_nan() && result.is_nan()) {
-//                 proptest::prop_assert_eq!(&expected, &result, "{:?} % {:?} != {:?} found {:?}",
-//                     lhs, rhs, expected, result,
-//                 );
-//             }
-//         });
-//     }
-
-//     #[test]
-//     fn int_exp() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("({})^({})", l, r)).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-
-//             unsafe {
-//                 crate::math::pow(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(&expected, &result, "{:?} ^ {:?} != {:?} found {:?}", lhs, rhs, expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn float_floor_exp() {
-//         let lua = mlua::Lua::new();
-
-//         proptest::proptest!(|(l: f64, r: f64)| {
-//             let mut lhs = TValue::new_float(l);
-//             let mut rhs = TValue::new_float(r);
-//             let mut result = TValue::new_bool(false);
-
-//             unsafe {
-//                 crate::math::pow(&mut lhs, &mut rhs, &mut result);
-//             }
-
-//             let expected = lua.load(format!("({})^({})", l, r, )).eval().map(|v: f64| {
-//                 TValue::new_float(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             if !(expected.is_nan() && result.is_nan()) {
-//                 proptest::prop_assert_eq!(&expected, &result, "{:?} ^ {:?} != {:?} found {:?}",
-//                     lhs, rhs, expected, result,
-//                 );
-//             }
-//         });
-//     }
-
-//     #[test]
-//     fn int_bin_and() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{l}&{r}")).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             unsafe {
-//                 crate::math::bin_and(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(&expected, &result, "{:?} & {:?} != {:?} found {:?}",
-//                 lhs, rhs, expected, result,
-//             );
-//         });
-//     }
-
-//     #[test]
-//     fn int_bin_or() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{l}|{r}")).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             unsafe {
-//                 crate::math::bin_or(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn int_bin_xor() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64, r: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut rhs = TValue::new_int(r);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("{l}~{r}")).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             unsafe {
-//                 crate::math::bin_xor(&mut lhs, &mut rhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-
-//     #[test]
-//     fn int_bin_not() {
-//         let lua = mlua::Lua::new();
-//         proptest::proptest!(|(l: i64)| {
-//             let mut lhs = TValue::new_int(l);
-//             let mut result = TValue::new_bool(false);
-//             let expected = lua.load(&format!("~{l}")).eval().map(|v: i64| {
-//                 TValue::new_int(v)
-//             }).unwrap_or_else(|_| TValue::new_bool(false));
-//             unsafe {
-//                 crate::math::bin_not(&mut lhs, &mut result);
-//             }
-//             proptest::prop_assert_eq!(expected, result);
-//         });
-//     }
-// }
+fn check_converted<T>(lhs: T, expected: T, rhs: &str) -> Result<(), TestCaseError> 
+where T: ToString + PartialEq + fmt::Display + fmt::Debug
+{
+    if lhs.to_string() != rhs {
+        eprintln!("Error paring:\ns: `{rhs}`\ni: {lhs}")
+    } else {
+        proptest::prop_assert_eq!(expected, lhs);
+    };
+    Ok(())
+}

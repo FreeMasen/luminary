@@ -8,6 +8,7 @@ description = "A compiler for lua."
 
 [dependencies]
 analisar = "0.2"
+bstr = "1.9"
 clap = { version = "4.4", features = ["derive"] }
 env_logger = "0.11"
 inkwell = { version = "0.2", features = ["llvm16-0"] }
@@ -16,16 +17,17 @@ runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features 
     "names",
 ] }
 tempfile = "3.8"
-tracing = { version = "0.1", features = ["log-always"] }
+tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4"
 
 [dev-dependencies]
 escargot = "0.5"
 insta = "1.31"
-mlua = { version = "0.9", features = ["lua53", "vendored"]}
+mlua = { version = "0.9", features = ["lua53", "vendored"] }
 proptest = "1.2"
 serde_json = "1"
+uuid = { version = "1.10", features = ["v4"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
@@ -51,7 +53,12 @@ installers = ["shell", "powershell", "homebrew"]
 tap = "FreeMasen/homebrew-tap"
 publish-jobs = ["homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
 # Publish jobs to run in CI
 pr-run-mode = "upload"
 # Whether +crt-static should be used on msvc

@@ -13,11 +13,13 @@
 # For debugging setting LUMINARY_WRITE_TEST_IR=1 will fill this directory with .ll files
 /test-ir
 *.out
-/early_example.*
-/ee
-/ee.*
 /public
 .cargo/config.toml
-/libluminary_runtime.*
-/*.dll
-/*.lib
+
+*.dll
+*.lib
+*.dylib
+*.a
+*.o
+
+/rt

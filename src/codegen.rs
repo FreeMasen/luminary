@@ -1,16 +1,6 @@
 use analisar::ast::{BinaryOperator, UnaryOperator};
 use inkwell::{
-    attributes::{Attribute, AttributeLoc},
-    basic_block::BasicBlock,
-    builder::Builder,
-    context::ContextRef,
-    intrinsics::Intrinsic,
-    module::Module,
-    types::{FloatType, IntType, PointerType, VoidType},
-    values::{
-        AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue,
-        IntValue, PointerValue,
-    },
+    attributes::{Attribute, AttributeLoc}, basic_block::BasicBlock, builder::Builder, context::ContextRef, intrinsics::Intrinsic, module::Module, types::{FloatType, IntType, PointerType, VoidType}, values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue}
 };
 
 pub struct CodeGenerator<'ctx> {
@@ -157,9 +147,12 @@ impl<'ctx> ExpectedHelpers<'ctx> {
             ),
             None,
         );
-        let get_tag = module.add_function(runtime::GET_TAG, c.i8_type().fn_type(&[
-            c.i8_type().ptr_type(Default::default()).into()
-        ], false), None);
+        let get_tag = module.add_function(
+            runtime::GET_TAG,
+            c.i8_type()
+                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+            None,
+        );
         apply_attrs_to_function(&c, &print);
         apply_attrs_to_function(&c, &tvalue_size);
         apply_attrs_to_function(&c, &to_number);
@@ -198,6 +191,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             runtime::math::BIN_OR,
             runtime::math::BIN_SHR,
             runtime::math::BIN_SHL,
+            runtime::EQUALS,
         ] {
             let f = module.add_function(
                 name,
@@ -244,7 +238,9 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     fn back_fill_error(&mut self) {
-        let f = self.module.add_function("luminary::std::error", self.void_type().fn_type(
+        let f = self.module.add_function(
+            "luminary::std::error",
+            self.void_type().fn_type(
                 &[
                     // msg
                     self.ptr_type().into(),
@@ -252,17 +248,21 @@ impl<'ctx> CodeGenerator<'ctx> {
                     self.ptr_type().into(),
                 ],
                 false,
-            ), None);
+            ),
+            None,
+        );
         let trap = Intrinsic::find("llvm.trap").expect("find trap");
         let trap = trap.get_declaration(&self.module, &[]).expect("trap decl");
-        self.builder.position_at_end(self.context.append_basic_block(f, "entry"));
+        self.builder
+            .position_at_end(self.context.append_basic_block(f, "entry"));
         let first_param = f
             .get_first_param()
             .unwrap()
             .as_any_value_enum()
             .into_pointer_value();
         first_param.set_name("message");
-        self.builder.build_call(self.helpers.print_err_msg, &[first_param.into()], "_");
+        self.builder
+            .build_call(self.helpers.print_err_msg, &[first_param.into()], "_");
         self.builder.build_call(trap, &[], "_");
         self.builder.build_return(None);
         self.helpers.error = f;
@@ -283,7 +283,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             ),
             None,
         );
-        self.builder.position_at_end(self.context.append_basic_block(f, "entry"));
+        self.builder
+            .position_at_end(self.context.append_basic_block(f, "entry"));
         let first_param = f
             .get_first_param()
             .unwrap()
@@ -297,14 +298,16 @@ impl<'ctx> CodeGenerator<'ctx> {
             .into_pointer_value();
         last_param.set_name("message");
         let default_msg = self.init_tvalue_string(DEFAULT_MSG, "default_msg");
-        let is_true = self.builder
+        let is_true = self
+            .builder
             .build_call(self.helpers.is_truthy, &[first_param.into()], "is_true")
             .as_any_value_enum()
             .into_int_value();
 
         let should_trap = self.context.append_basic_block(f, "should_trap");
         let exit = self.context.append_basic_block(f, "exit");
-        self.builder.build_conditional_branch(is_true, exit, should_trap);
+        self.builder
+            .build_conditional_branch(is_true, exit, should_trap);
 
         self.builder.position_at_end(should_trap);
         let is_null = self.builder.build_is_null(last_param, "is_null");
@@ -313,36 +316,46 @@ impl<'ctx> CodeGenerator<'ctx> {
         let arg_nn = self.context.append_basic_block(f, "arg_nn");
         let arg_nil = self.context.append_basic_block(f, "arg_nil");
         let trap = self.context.append_basic_block(f, "trap");
-        self.builder.build_conditional_branch(is_null, arg_null, arg_nn);
+        self.builder
+            .build_conditional_branch(is_null, arg_null, arg_nn);
 
         self.builder.position_at_end(arg_null);
         self.builder.build_unconditional_branch(trap);
 
         self.builder.position_at_end(arg_nn);
-        let tag = self.builder.build_call(self.helpers.get_tag, &[
-            last_param.into()
-        ], "tag").as_any_value_enum().into_int_value();
-        let arg_is_nil = self.builder.build_int_compare(inkwell::IntPredicate::EQ, tag, self.const_u8(0), "arg_is_nil");
+        let tag = self
+            .builder
+            .build_call(self.helpers.get_tag, &[last_param.into()], "tag")
+            .as_any_value_enum()
+            .into_int_value();
+        let arg_is_nil = self.builder.build_int_compare(
+            inkwell::IntPredicate::EQ,
+            tag,
+            self.const_u8(0),
+            "arg_is_nil",
+        );
 
-        self.builder.build_conditional_branch(arg_is_nil, arg_nil, trap);
-        
+        self.builder
+            .build_conditional_branch(arg_is_nil, arg_nil, trap);
+
         self.builder.position_at_end(arg_nil);
         self.builder.build_unconditional_branch(trap);
 
         self.builder.position_at_end(trap);
         let msg = self.builder.build_phi(self.ptr_type(), "msg");
-        
-        msg.add_incoming(&[(&last_param, arg_nn), (&default_msg, arg_null), (&default_msg, arg_nil)]);
+
+        msg.add_incoming(&[
+            (&last_param, arg_nn),
+            (&default_msg, arg_null),
+            (&default_msg, arg_nil),
+        ]);
         let msg = msg.as_any_value_enum().into_pointer_value();
         self.builder.build_call(
             self.helpers.error,
             &[
                 msg.into(),
                 // TODO: set this to TValue(0)...
-                self
-                    .ptr_type()
-                    .const_null()
-                    .into(),
+                self.ptr_type().const_null().into(),
             ],
             "error",
         );
@@ -462,7 +475,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
     /// Generate code that will emit a single alloca for the tvalue base type setting all values
     /// to their defaults (all 0)
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn alloca_tvalue(&self, name: &str) -> PointerValue<'ctx> {
         let size = self
             .builder
@@ -582,9 +595,10 @@ impl<'ctx> CodeGenerator<'ctx> {
         &self,
         value: PointerValue<'ctx>,
         msg: PointerValue<'ctx>,
+        name: &str,
     ) -> PointerValue<'ctx> {
         self.builder
-            .build_call(self.helpers.assert, &[value.into(), msg.into()], "_");
+            .build_call(self.helpers.assert, &[value.into(), msg.into()], "_");        
         value
     }
 
@@ -612,11 +626,10 @@ impl<'ctx> CodeGenerator<'ctx> {
         &self,
         value: PointerValue<'ctx>,
         dest: PointerValue<'ctx>,
-    ) -> IntValue<'ctx> {
+    ) -> PointerValue<'ctx> {
         self.builder
-            .build_call(self.helpers.to_string, &[value.into(), dest.into()], "_")
-            .as_any_value_enum()
-            .into_int_value()
+            .build_call(self.helpers.to_string, &[value.into(), dest.into()], "_");
+        dest
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -646,7 +659,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             GreaterThanEqual => todo!(),
             LessThan => todo!(),
             LessThanEqual => todo!(),
-            Equal => todo!(),
+            Equal => runtime::EQUALS,
             NotEqual => todo!(),
             And => todo!(),
             Or => todo!(),
@@ -661,31 +674,6 @@ impl<'ctx> CodeGenerator<'ctx> {
             Not => todo!(),
             Length => todo!(),
             BitwiseNot => runtime::math::BIN_NOT,
-        }
-    }
-
-    pub fn apply_debug_prints(&self) {
-        let printf = self.module.get_function("printf").unwrap();
-        for f in self.module.get_functions() {
-            let fn_name = f.get_name().to_string_lossy();
-            for (i, bb) in f.get_basic_blocks().into_iter().enumerate() {
-                let fmt = self.alloca_str(&[0u8; 255], "fmt");
-                self.builder
-                    .position_before(&bb.get_first_instruction().unwrap());
-                if i == 0 {
-                    self.builder.build_store(
-                        fmt,
-                        self.const_string(format!("{}\n\0", fn_name).as_bytes()),
-                    );
-                } else {
-                    let bb_name = bb.get_name().to_string_lossy();
-                    self.builder.build_store(
-                        fmt,
-                        self.const_string(&format!("{}::{}\n\0", fn_name, bb_name).as_bytes()),
-                    );
-                };
-                self.builder.build_call(printf, &[fmt.into()], "_");
-            }
         }
     }
 }
