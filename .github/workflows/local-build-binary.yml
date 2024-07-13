@@ -83,7 +83,7 @@ jobs:
           version: 16.0.6
           directory: ${{ github.workspace }}/llvm
       - name: Install LLVM and Clang (MacOS-AArch64)
-        if: matrix.runner == "macos-14"
+        if: ${{matrix.runner == 'macos-14'}}
         uses: FreeMasen/install-llvm-action@c9be196bafb9b4f4a7486019d3e525be0b4dc110
         with:
           download-url: https://github.com/FreeMasen/llvm-builds/releases/download/v16.0.6
@@ -92,7 +92,7 @@ jobs:
           arch: aarch64
           directory: ${{ github.workspace }}/llvm
       - name: update llvm-sys env var (MacOS)
-        if: runner.os == 'Macos'
+        if: ${{runner.os == 'Macos'}}
         run: echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
       - name: update llvm-sys env var (Linux)
         if: runner.os == 'Linux'
@@ -100,7 +100,7 @@ jobs:
           sudo apt-get install build-essential
           echo "LLVM_SYS_160_PREFIX=$($GITHUB_WORKSPACE/llvm/bin/llvm-config --prefix)" >> "$GITHUB_ENV"
       - name: update llvm-sys env var (Windows)
-        if: runner.os == 'Windows'
+        if: ${{runner.os == 'Windows'}}
         run:  |
           $var = C:\LLVM\bin\llvm-config --prefix
           echo "LLVM_SYS_160_PREFIX=$var" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
