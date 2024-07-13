@@ -97,3 +97,5 @@ jobs:
       run: cargo test --test link
     - name: Run Math Integration Tests
       run: cargo test --test math
+    - name: Run Basic Functions Integration Tests
+      run: cargo test --test basic_fns
