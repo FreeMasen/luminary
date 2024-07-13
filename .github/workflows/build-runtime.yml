@@ -70,7 +70,7 @@ jobs:
     - name: Upload PR
       uses: actions/upload-artifact@v4
       with:
-        name: luminary_libs-${{ matrix.os }}-${{ github.ref_name.replace('/', '_') }}
+        name: luminary_libs-${{ matrix.os }}
         path: ${{ env.TARGET_DIR }}.${{ env.COMP_SUFFIX }}
         overwrite: true
     - name: Upload Release
