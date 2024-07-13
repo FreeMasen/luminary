@@ -3,6 +3,7 @@ name = "luminary"
 version.workspace = true
 edition.workspace = true
 repository = "https://github.com/FreeMasen/luminary"
+homepage = "https://gh.freemasen.com/luminary"
 authors = ["Robert Masen <r.f.masen@gmail.com>"]
 description = "A compiler for lua."
 
@@ -45,7 +46,7 @@ publish = true
 # Config for 'cargo dist'
 [workspace.metadata.dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.11.1"
+cargo-dist-version = "0.19.1"
 # CI backends to support
 ci = ["github"]
 # The installers to generate for each app
