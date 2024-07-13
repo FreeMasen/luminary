@@ -16,17 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1.8.3
-      with:
-        # The version of LLVM and Clang binaries to install.
-        version: 16
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test -p luminary-runtime --features runtime
       env: 
-        LLVM_SYS_160_PREFIX: ${{ env.LLVM_PATH }}
         LUMINARY_PRINT_TVALUE: 1
   integration_tests:
     strategy:
@@ -99,3 +93,5 @@ jobs:
       run: cargo test --test math
     - name: Run Basic Functions Integration Tests
       run: cargo test --test basic_fns
+    - name: Run Basic Functions Integration Tests
+      run: cargo test --test logic
