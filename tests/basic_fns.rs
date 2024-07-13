@@ -1,6 +1,7 @@
-use common::{check_test, check_test_err};
+use common::{check_return_code, check_test, check_test_err};
 use std::{fmt, process::Output};
 mod common;
+
 
 #[test]
 fn assert_positive() {
