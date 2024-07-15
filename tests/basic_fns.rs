@@ -1,5 +1,5 @@
-use common::{check_return_code, check_test, check_test_err};
-use std::{fmt, process::Output};
+use common::{check_test, check_test_err};
+
 mod common;
 
 
