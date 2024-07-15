@@ -36,15 +36,24 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install LLVM and Clang (Linux)
+      id: install
       if: runner.os == 'Linux'
       uses: FreeMasen/llvm-install-action@v1.0.0
       with:
         version: 16.0.6
     - name: Run Link Integration Tests
       run: cargo test --test link
+      env:
+        LLVM_SYS_160_PREFIX: ${{ steps.install.outputs.directory }}
     - name: Run Math Integration Tests
       run: cargo test --test math
+      env:
+        LLVM_SYS_160_PREFIX: ${{ steps.install.outputs.directory }}
     - name: Run Basic Functions Integration Tests
       run: cargo test --test basic_fns
+      env:
+        LLVM_SYS_160_PREFIX: ${{ steps.install.outputs.directory }}
     - name: Run Basic Functions Integration Tests
       run: cargo test --test logic
+      env:
+        LLVM_SYS_160_PREFIX: ${{ steps.install.outputs.directory }}
