@@ -63,7 +63,9 @@ jobs:
         with:
           version: 16.0.6
       - name: update llvm-sys env var
-        run: echo "LLVM_SYS_160_PREFIX=\"${{ steps.install.outputs.directory }}\"" >> "$GITHUB_ENV"
+        run: |
+          echo 'setting LLVM_SYS_160_PREFIX to "${{ steps.install.outputs.directory }}"'
+          echo "LLVM_SYS_160_PREFIX=\"${{ steps.install.outputs.directory }}\"" >> "$GITHUB_ENV"
       - name: Install build-essential
         if: runner.os == 'Linux'
         run: |
