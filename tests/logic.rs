@@ -36,20 +36,20 @@ fn int_eq() {
     })
 }
 
-// #[test]
-// fn str_eq() {
-//     let thread_name = std::thread::current().name().unwrap().to_string();
-//     proptest::proptest!(|(s: &str )| {
-//         let cmps = [
-//             (format!("({s}) == ({s})"), 1),
-//             (format!("({s}) == false"), 0),
-//         ];
-//         for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
-//             let lua = format!("return ({cmp})");
-//             let test = common::setup(&format!("{thread_name}{l}{i}"));
-//             let (d, s) = test.run_lua(&lua);
-//             check_return_code(&d, exit);
-//             check_return_code(&s, exit);
-//         }
-//     })
-// }
+#[test]
+fn str_eq() {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(s in "[a-zA-Z0-9 -_]*")| {
+        let cmps = [
+            (format!("('{s}') == (\"{s}\")"), 1),
+            (format!("('{s}') == false"), 0),
+        ];
+        for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
+            let lua = format!("return ({cmp})");
+            let test = common::setup(&format!("{thread_name}{s}{i}"));
+            let (d, s) = test.run_lua(&lua);
+            check_return_code(&d, exit);
+            check_return_code(&s, exit);
+        }
+    })
+}

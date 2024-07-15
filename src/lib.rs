@@ -7,7 +7,7 @@ use codegen::CodeGenerator;
 use core::fmt;
 use inkwell::{context::Context, module::Module, values::PointerValue};
 use std::{backtrace::Backtrace, collections::HashMap, path::PathBuf};
-pub mod bytecode;
+
 pub mod codegen;
 
 #[derive(Debug)]
