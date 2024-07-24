@@ -6,4 +6,5 @@
 - name: update llvm-sys env var
   run: |
     echo 'setting LLVM_SYS_160_PREFIX to "${{ steps.install.outputs.directory }}"'
+    echo "$(llvm-config --prefix)"
     echo "LLVM_SYS_160_PREFIX=\"${{ steps.install.outputs.directory }}\"" >> "$GITHUB_ENV"
