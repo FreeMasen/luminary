@@ -122,8 +122,8 @@ jobs:
           "version": "16.0.6"
       - name: "update llvm-sys env var"
         run: |
+          ls "${{ steps.install.outputs.directory }}"
           echo 'setting LLVM_SYS_160_PREFIX to "${{ steps.install.outputs.directory }}"'
-          echo "$(llvm-config --prefix)"
           echo "LLVM_SYS_160_PREFIX=\"${{ steps.install.outputs.directory }}\"" >> "$GITHUB_ENV"
       - uses: swatinem/rust-cache@v2
         with:
