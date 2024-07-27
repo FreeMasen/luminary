@@ -132,14 +132,20 @@ fn main() {
             }
         }
         FileType::Exe => {
+            #[cfg(target_os = "windows")]
+            let obj_ext = ".obj";
+            #[cfg(not(target_os = "windows"))]
+            let obj_ext = ".o";
             let obj = run_llc(LlvmFileType::Object, &module, opt);
-            let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
+            let mut tmp_o = tempfile::Builder::new().suffix(obj_ext).tempfile().unwrap();
+            tmp_o.write_all(obj.as_slice()).unwrap();
             std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
-
+            tmp_o.flush().unwrap();
+            
             let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
                 (dest_path.clone(), None)
             } else {
-                let tmp2 = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
+                let tmp2 = tempfile::Builder::new().suffix(obj_ext).tempfile().unwrap();
                 (tmp2.path().to_owned(), Some(tmp2))
             };
             link_exe(
