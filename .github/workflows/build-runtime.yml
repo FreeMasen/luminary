@@ -32,6 +32,10 @@ jobs:
       TAG: ${{ !github.event.pull_request && github.ref_name || '' }}
     steps:
     - uses: actions/checkout@v4
+    - name: Install LLVM and Clang
+      uses: FreeMasen/llvm-install-action@v1.0.3
+      with:
+        version: 16.0.6
     - name: build runtime libs
       id: build-runtime
       run: >-
