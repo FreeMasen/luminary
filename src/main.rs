@@ -137,9 +137,12 @@ fn main() {
             #[cfg(not(target_os = "windows"))]
             let obj_ext = ".o";
             let obj = run_llc(LlvmFileType::Object, &module, opt);
-            let mut tmp_o = tempfile::Builder::new().suffix(obj_ext).tempfile().unwrap();
+            let tmp_o = tempfile::Builder::new()
+                .suffix(obj_ext)
+                .tempfile()
+                .unwrap();
+            let (mut tmp_o, tmp_o_path) = tmp_o.keep().unwrap();
             tmp_o.write_all(obj.as_slice()).unwrap();
-            std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
             tmp_o.flush().unwrap();
             
             let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
@@ -149,7 +152,7 @@ fn main() {
                 (tmp2.path().to_owned(), Some(tmp2))
             };
             link_exe(
-                tmp_o.path(),
+                tmp_o_path.as_path(),
                 &dest,
                 runtime_location.as_ref(),
                 &library,
