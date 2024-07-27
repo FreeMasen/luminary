@@ -1,13 +1,5 @@
 - name: Install LLVM and Clang
   id: install
-  uses: FreeMasen/llvm-install-action@v1.0.1
+  uses: FreeMasen/llvm-install-action@v1.0.2
   with:
     version: 16.0.6
-- name: update llvm-sys env var
-  run: |
-    ls "${{ steps.install.outputs.directory }}"
-    echo 'setting LLVM_SYS_160_PREFIX to'
-    echo '${{ steps.install.outputs.directory }}'
-    llvm-config --prefix
-    echo "LLVM_SYS_160_PREFIX=\"${{ steps.install.outputs.directory }}\"" >> "$GITHUB_ENV"
-    
