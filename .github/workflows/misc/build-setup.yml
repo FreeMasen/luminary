@@ -1,8 +1,3 @@
-- name: Install zstd aarch
-  if: ${{ runner.os == 'macOS' && runner.arch == 'ARM64' }}
-  run: |
-    brew fetch --force --bottle-tag=arm64_sonoma zstd
-    brew install $(brew --cache --bottle-tag=arm64_sonoma zstd)
 - name: Install LLVM and Clang
   id: install
   uses: FreeMasen/llvm-install-action@v1.0.3

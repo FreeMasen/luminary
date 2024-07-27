@@ -23,7 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 log = "0.4"
 
 [features]
-default = []
+default = ["codegen"]
 codegen = ["dep:inkwell"]
 
 
