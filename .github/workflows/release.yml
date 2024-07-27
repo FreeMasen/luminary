@@ -117,7 +117,7 @@ jobs:
           submodules: recursive
       - name: "Install LLVM and Clang"
         id: "install"
-        uses: "FreeMasen/llvm-install-action@v1.0.2"
+        uses: "FreeMasen/llvm-install-action@v1.0.3"
         with:
           "version": "16.0.6"
       - uses: swatinem/rust-cache@v2
