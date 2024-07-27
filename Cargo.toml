@@ -76,4 +76,4 @@ github-build-setup = "misc/build-setup.yml"
 precise-builds = true
 
 [workspace.metadata.dist.github-custom-runners]
-aarch64-apple-darwin = "macos-13"
+aarch64-apple-darwin = "macos-14"
