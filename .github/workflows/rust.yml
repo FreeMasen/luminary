@@ -40,7 +40,7 @@ jobs:
         version: 16.0.6
     - name: Install zstd
       if: ${{ matrix.os == 'macos-latest' }}
-      run: brew install zstd
+      run: brew reinstall zstd
     - name: Run Link Integration Tests
       run: cargo test-codegen --test link
     - name: Run Math Integration Tests
