@@ -38,6 +38,9 @@ jobs:
       uses: FreeMasen/llvm-install-action@v1.0.3
       with:
         version: 16.0.6
+    - name: Install zstd
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: brew install zstd
     - name: Run Link Integration Tests
       run: cargo test-codegen --test link
     - name: Run Math Integration Tests
