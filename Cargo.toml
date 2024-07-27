@@ -75,5 +75,8 @@ github-build-setup = "misc/build-setup.yml"
 # Build only the required packages, and individually
 precise-builds = true
 
+[workspace.metadata.dist.dependencies.homebrew]
+zstd = { stage = ["build", "run"], targets = ["aarch64-apple-darwin"] }
+
 [workspace.metadata.dist.github-custom-runners]
 aarch64-apple-darwin = "macos-14"
