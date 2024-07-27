@@ -194,7 +194,7 @@ fn emit_error_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
-    _name_if_const: &str
+    _name_if_const: &str,
 ) -> PointerValue<'ctx> {
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
@@ -220,7 +220,7 @@ fn emit_assert_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
-    name_if_const: &str
+    name_if_const: &str,
 ) -> PointerValue<'ctx> {
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
@@ -246,7 +246,7 @@ fn emit_to_string_call<'ctx>(
     generator: &CodeGenerator<'ctx>,
     call: &FunctionCall,
     vars: &mut HashMap<String, PointerValue<'ctx>>,
-    name_if_const: &str
+    name_if_const: &str,
 ) -> PointerValue<'ctx> {
     let dest = generator.alloca_tvalue(name_if_const);
     match &call.args {

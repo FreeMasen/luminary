@@ -14,13 +14,14 @@ clap = { version = "4.4", features = ["derive"] }
 env_logger = "0.11"
 inkwell = { version = "0.4", features = ["llvm16-0"], optional = true }
 lex_lua = "0.2.0"
+log = "0.4"
+rand = "0.8"
 runtime = { package = "luminary-runtime", path = "crates/runtime-lib", features = [
     "names",
 ] }
 tempfile = "3.8"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-log = "0.4"
 
 [features]
 default = ["codegen"]

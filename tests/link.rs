@@ -1,5 +1,3 @@
-use common::{check_test, check_test_err};
-use std::process::Command;
 mod common;
 
 #[test]

@@ -1,6 +1,13 @@
 use analisar::ast::{BinaryOperator, UnaryOperator};
 use inkwell::{
-    attributes::{Attribute, AttributeLoc}, basic_block::BasicBlock, builder::Builder, context::ContextRef, intrinsics::Intrinsic, module::Module, types::{FloatType, IntType, PointerType, VoidType}, values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue}
+    attributes::{Attribute, AttributeLoc},
+    basic_block::BasicBlock,
+    builder::Builder,
+    context::ContextRef,
+    intrinsics::Intrinsic,
+    module::Module,
+    types::{FloatType, IntType, PointerType, VoidType},
+    values::{AnyValue, ArrayValue, BasicValue, FloatValue, FunctionValue, IntValue, PointerValue},
 };
 
 pub struct CodeGenerator<'ctx> {
@@ -262,7 +269,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             .into_pointer_value();
         first_param.set_name("message");
         self.builder
-            .build_call(self.helpers.print_err_msg, &[first_param.into()], "_").unwrap();
+            .build_call(self.helpers.print_err_msg, &[first_param.into()], "_")
+            .unwrap();
         self.builder.build_call(trap, &[], "_").unwrap();
         self.builder.build_return(None).unwrap();
         self.helpers.error = f;
@@ -308,7 +316,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         let should_trap = self.context.append_basic_block(f, "should_trap");
         let exit = self.context.append_basic_block(f, "exit");
         self.builder
-            .build_conditional_branch(is_true, exit, should_trap).unwrap();
+            .build_conditional_branch(is_true, exit, should_trap)
+            .unwrap();
 
         self.builder.position_at_end(should_trap);
         let is_null = self.builder.build_is_null(last_param, "is_null").unwrap();
@@ -318,7 +327,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         let arg_nil = self.context.append_basic_block(f, "arg_nil");
         let trap = self.context.append_basic_block(f, "trap");
         self.builder
-            .build_conditional_branch(is_null, arg_null, arg_nn).unwrap();
+            .build_conditional_branch(is_null, arg_null, arg_nn)
+            .unwrap();
 
         self.builder.position_at_end(arg_null);
         self.builder.build_unconditional_branch(trap).unwrap();
@@ -330,15 +340,19 @@ impl<'ctx> CodeGenerator<'ctx> {
             .unwrap()
             .as_any_value_enum()
             .into_int_value();
-        let arg_is_nil = self.builder.build_int_compare(
-            inkwell::IntPredicate::EQ,
-            tag,
-            self.const_u8(0),
-            "arg_is_nil",
-        ).unwrap();
+        let arg_is_nil = self
+            .builder
+            .build_int_compare(
+                inkwell::IntPredicate::EQ,
+                tag,
+                self.const_u8(0),
+                "arg_is_nil",
+            )
+            .unwrap();
 
         self.builder
-            .build_conditional_branch(arg_is_nil, arg_nil, trap).unwrap();
+            .build_conditional_branch(arg_is_nil, arg_nil, trap)
+            .unwrap();
 
         self.builder.position_at_end(arg_nil);
         self.builder.build_unconditional_branch(trap).unwrap();
@@ -352,15 +366,17 @@ impl<'ctx> CodeGenerator<'ctx> {
             (&default_msg, arg_nil),
         ]);
         let msg = msg.as_any_value_enum().into_pointer_value();
-        self.builder.build_call(
-            self.helpers.error,
-            &[
-                msg.into(),
-                // TODO: set this to TValue(0)...
-                self.ptr_type().const_null().into(),
-            ],
-            "error",
-        ).unwrap();
+        self.builder
+            .build_call(
+                self.helpers.error,
+                &[
+                    msg.into(),
+                    // TODO: set this to TValue(0)...
+                    self.ptr_type().const_null().into(),
+                ],
+                "error",
+            )
+            .unwrap();
         // will never execute but llvm can't figure that out
         self.builder.build_unconditional_branch(exit).unwrap();
 
@@ -485,18 +501,22 @@ impl<'ctx> CodeGenerator<'ctx> {
             .unwrap()
             .as_any_value_enum()
             .into_int_value();
-        let ptr = self.builder.build_array_alloca(self.i8_type(), size, name).unwrap();
-        self.builder.build_call(self.ctors.nil, &[ptr.into()], "_").unwrap();
+        let ptr = self
+            .builder
+            .build_array_alloca(self.i8_type(), size, name)
+            .unwrap();
+        self.builder
+            .build_call(self.ctors.nil, &[ptr.into()], "_")
+            .unwrap();
         ptr
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn alloca_str(&self, value: &[u8], name: &str) -> PointerValue<'ctx> {
-        let ptr = self.builder.build_array_alloca(
-            self.i8_type(),
-            self.const_i32(value.len() as i32),
-            name,
-        ).unwrap();
+        let ptr = self
+            .builder
+            .build_array_alloca(self.i8_type(), self.const_i32(value.len() as i32), name)
+            .unwrap();
         let value = self.const_string(value);
         self.builder.build_store(ptr, value).unwrap();
         ptr
@@ -507,7 +527,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let init = self.const_bool(value);
         self.builder
-            .build_call(self.ctors.bool, &[alloca.into(), init.into()], "_").unwrap();
+            .build_call(self.ctors.bool, &[alloca.into(), init.into()], "_")
+            .unwrap();
         alloca
     }
 
@@ -517,11 +538,13 @@ impl<'ctx> CodeGenerator<'ctx> {
         if value == value.trunc() {
             let init = self.const_i64(value as i64);
             self.builder
-                .build_call(self.ctors.int, &[alloca.into(), init.into()], "_").unwrap();
+                .build_call(self.ctors.int, &[alloca.into(), init.into()], "_")
+                .unwrap();
         } else {
             let init = self.const_f64(value);
             self.builder
-                .build_call(self.ctors.float, &[alloca.into(), init.into()], "_").unwrap();
+                .build_call(self.ctors.float, &[alloca.into(), init.into()], "_")
+                .unwrap();
         }
         alloca
     }
@@ -531,7 +554,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let init = self.const_i64(value);
         self.builder
-            .build_call(self.ctors.int, &[alloca.into(), init.into()], "_").unwrap();
+            .build_call(self.ctors.int, &[alloca.into(), init.into()], "_")
+            .unwrap();
         alloca
     }
 
@@ -540,11 +564,13 @@ impl<'ctx> CodeGenerator<'ctx> {
         let alloca = self.alloca_tvalue(name);
         let capacity = self.const_u32(value.len() as _);
         let ptr = self.alloca_str(value, &format!("{name}init"));
-        self.builder.build_call(
-            self.ctors.string_const,
-            &[alloca.into(), capacity.into(), ptr.into()],
-            "_",
-        ).unwrap();
+        self.builder
+            .build_call(
+                self.ctors.string_const,
+                &[alloca.into(), capacity.into(), ptr.into()],
+                "_",
+            )
+            .unwrap();
         alloca
     }
 
@@ -564,7 +590,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             .get_function(op_name)
             .unwrap_or_else(|| panic!("{op_name} is not a function in this module"));
         self.builder
-            .build_call(op_fn, &[value.into(), dest.into()], success_name).unwrap();
+            .build_call(op_fn, &[value.into(), dest.into()], success_name)
+            .unwrap();
     }
 
     /// generate code that will perform a binary math operation placing the result in the `dest` pointer
@@ -584,13 +611,15 @@ impl<'ctx> CodeGenerator<'ctx> {
             .get_function(op_name)
             .unwrap_or_else(|| panic!("{op_name} is not a function in this module"));
         self.builder
-            .build_call(op_fn, &[lhs.into(), rhs.into(), dest.into()], success_name).unwrap();
+            .build_call(op_fn, &[lhs.into(), rhs.into(), dest.into()], success_name)
+            .unwrap();
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn perform_print(&self, value: PointerValue<'ctx>) {
         self.builder
-            .build_call(self.helpers.print, &[value.into()], "_").unwrap();
+            .build_call(self.helpers.print, &[value.into()], "_")
+            .unwrap();
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -601,7 +630,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         name: &str,
     ) -> PointerValue<'ctx> {
         self.builder
-            .build_call(self.helpers.assert, &[value.into(), msg.into()], "_").unwrap();        
+            .build_call(self.helpers.assert, &[value.into(), msg.into()], "_")
+            .unwrap();
         value
     }
 
@@ -612,7 +642,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         level: PointerValue<'ctx>,
     ) -> PointerValue<'ctx> {
         self.builder
-            .build_call(self.helpers.error, &[value.into(), level.into()], "_").unwrap();
+            .build_call(self.helpers.error, &[value.into(), level.into()], "_")
+            .unwrap();
         value
     }
 
@@ -632,14 +663,16 @@ impl<'ctx> CodeGenerator<'ctx> {
         dest: PointerValue<'ctx>,
     ) -> PointerValue<'ctx> {
         self.builder
-            .build_call(self.helpers.to_string, &[value.into(), dest.into()], "_").unwrap();
+            .build_call(self.helpers.to_string, &[value.into(), dest.into()], "_")
+            .unwrap();
         dest
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn convert_float_to_i32(&self, value: FloatValue<'ctx>) -> IntValue<'ctx> {
         self.builder
-            .build_float_to_signed_int(value, self.i32_type(), "_").unwrap()
+            .build_float_to_signed_int(value, self.i32_type(), "_")
+            .unwrap()
     }
 
     #[tracing::instrument(level = "trace")]
@@ -695,6 +728,4 @@ fn apply_attrs_to_function<'a>(context: &ContextRef<'a>, f: &FunctionValue<'a>) 
     }
 }
 
-pub enum Error {
-    
-}
+pub enum Error {}

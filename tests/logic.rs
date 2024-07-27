@@ -7,7 +7,7 @@ fn bool_eq() {
         ("true == true", 1),
         ("true == false", 0),
         ("false == false", 1),
-        ("false == true", 0)
+        ("false == true", 0),
     ];
     for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
         let lua = format!("return {cmp}");

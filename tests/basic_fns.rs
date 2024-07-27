@@ -2,7 +2,6 @@ use common::{check_test, check_test_err};
 
 mod common;
 
-
 #[test]
 fn assert_positive() {
     let lua = r#"assert(true)"#;

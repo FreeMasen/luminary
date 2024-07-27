@@ -16,6 +16,7 @@ use inkwell::{
     },
     OptimizationLevel,
 };
+use rand::Rng;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -24,6 +25,8 @@ struct Args {
     output: Option<PathBuf>,
     #[arg(long, default_value_t = FileType::Exe)]
     filetype: FileType,
+    #[arg(long)]
+    intermediate_dir: Option<PathBuf>,
     #[arg(long, short = 'O', default_value_t = 0)]
     opt: u8,
     #[arg(long = "runtime", short)]
@@ -74,18 +77,20 @@ impl Display for FileType {
 
 fn main() {
     env_logger::init();
-
+    let args = Args::parse();
+    tracing::warn!("ARGS: {args:#?}");
     let Args {
         input,
         output,
         filetype,
+        intermediate_dir,
         opt,
         runtime_location,
         library,
         location,
         force,
-    } = Args::parse();
-    tracing::warn!("ARGS: {}, {runtime_location:?}", input.display());
+    } = args;
+    
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
     module.verify().unwrap_or_else(|e| {
@@ -136,15 +141,32 @@ fn main() {
             let obj_ext = ".obj";
             #[cfg(not(target_os = "windows"))]
             let obj_ext = ".o";
+
             let obj = run_llc(LlvmFileType::Object, &module, opt);
-            let tmp_o = tempfile::Builder::new()
-                .suffix(obj_ext)
-                .tempfile()
-                .unwrap();
-            let (mut tmp_o, tmp_o_path) = tmp_o.keep().unwrap();
-            tmp_o.write_all(obj.as_slice()).unwrap();
-            tmp_o.flush().unwrap();
-            
+
+            let (tmp_path, _tmp) = if let Some(tmp) = intermediate_dir {
+                std::fs::create_dir_all(&tmp).ok();
+                let mut rng = rand::thread_rng();
+                let rnd_name: String = (0..5).into_iter().map(|_| {
+                    char::from(if rng.r#gen() {
+                        rng.gen_range(97..=122)
+                    } else if rng.r#gen() {
+                        rng.gen_range(65..=90)
+                    } else {
+                        rng.gen_range(48..=57)
+                    })
+                }).collect();
+                let tmp_path = tmp.join(format!("{rnd_name}{obj_ext}"));
+                eprintln!("tmp!: {}", tmp_path.display());
+                std::fs::File::create(&tmp_path).unwrap();
+                (tmp_path, None)
+            } else {
+                let tmp_o = tempfile::Builder::new().suffix(obj_ext).tempfile().unwrap();
+                let p = tmp_o.path().to_path_buf();
+                (p, Some(tmp_o))
+            };
+            std::fs::write(&tmp_path, obj.as_slice()).unwrap();
+
             let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
                 (dest_path.clone(), None)
             } else {
@@ -152,7 +174,7 @@ fn main() {
                 (tmp2.path().to_owned(), Some(tmp2))
             };
             link_exe(
-                tmp_o_path.as_path(),
+                tmp_path.as_path(),
                 &dest,
                 runtime_location.as_ref(),
                 &library,

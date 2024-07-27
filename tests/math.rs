@@ -82,9 +82,17 @@ fn math_prop_test_integer<'lua, R>(
     op: &str,
     l: &'lua mlua::Lua,
     name: &str,
-) -> Result<(), TestCaseError> 
-where R: Copy + FromStr + ToString + PartialEq + fmt::Display + fmt::Debug + Default + mlua::FromLua<'lua>,
-    <R as FromStr>::Err: fmt::Display + fmt::Debug
+) -> Result<(), TestCaseError>
+where
+    R: Copy
+        + FromStr
+        + ToString
+        + PartialEq
+        + fmt::Display
+        + fmt::Debug
+        + Default
+        + mlua::FromLua<'lua>,
+    <R as FromStr>::Err: fmt::Display + fmt::Debug,
 {
     // Because mlua doesn't allow for capturing the output
     // of a function (print statements), we need to evaluate these operations
@@ -96,10 +104,7 @@ where R: Copy + FromStr + ToString + PartialEq + fmt::Display + fmt::Debug + Def
     let script = format!("print{expr}");
     let name = format!("{name}_{lhs}_{rhs}");
     let test = common::setup(name.as_str());
-    let expected: R = l
-            .load(&expr).eval().map(|v: R| {
-            v
-        }).unwrap_or_default();
+    let expected: R = l.load(&expr).eval().map(|v: R| v).unwrap_or_default();
     let (d, s) = test.run_lua(&script);
     check_test(&d);
     check_test(&s);
@@ -110,9 +115,10 @@ where R: Copy + FromStr + ToString + PartialEq + fmt::Display + fmt::Debug + Def
     Ok(())
 }
 
-
-fn convert_stdout<T>(stdout: &[u8]) -> Result<(T, String), TestCaseError> 
-where T: FromStr, <T as FromStr>::Err: fmt::Display + fmt::Debug
+fn convert_stdout<T>(stdout: &[u8]) -> Result<(T, String), TestCaseError>
+where
+    T: FromStr,
+    <T as FromStr>::Err: fmt::Display + fmt::Debug,
 {
     let stdout = String::from_utf8_lossy(stdout);
     let v_str = stdout.lines().next().expect(">= 1 line");
@@ -126,8 +132,9 @@ where T: FromStr, <T as FromStr>::Err: fmt::Display + fmt::Debug
     Ok((v, v_str.to_string()))
 }
 
-fn check_converted<T>(lhs: T, expected: T, rhs: &str) -> Result<(), TestCaseError> 
-where T: ToString + PartialEq + fmt::Display + fmt::Debug
+fn check_converted<T>(lhs: T, expected: T, rhs: &str) -> Result<(), TestCaseError>
+where
+    T: ToString + PartialEq + fmt::Display + fmt::Debug,
 {
     if lhs.to_string() != rhs {
         eprintln!("Error paring:\ns: `{rhs}`\ni: {lhs}")
