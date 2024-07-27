@@ -1,11 +1,6 @@
 #![allow(dead_code)]
 use std::{
-    fmt,
-    path::{Path, PathBuf},
-    process::{Command, Output, Stdio},
-    sync::OnceLock,
-    time::SystemTime,
-    io::Read,
+    fmt, io::Read, path::{Path, PathBuf}, process::{Child, Command, Output, Stdio}, sync::OnceLock, time::SystemTime
 };
 
 use escargot::format::Message;
@@ -178,59 +173,10 @@ impl TestConfig {
                     .to_string()
             });
         let debug_path = target_dir.join(format!("{file_name}.ll"));
-        let (std_err, std_out) = std::env::var("LUMINARY_TEST_DUMP_OUTPUT").map(|_| {
-            (Stdio::inherit(), Stdio::inherit())
-        }).unwrap_or_else(|_| {
-            (Stdio::piped(), Stdio::piped())
-        });
-        let cmd = Command::new(&self.cmd)
-            .arg(&lua_path)
-            .arg("-r")
-            .arg(&self.static_runtime.parent().unwrap())
-            .arg("-o")
-            .arg(&debug_path)
-            .arg("--filetype")
-            .arg("ll")
-            .stderr(std_out)
-            .stdout(std_err)
-            .spawn()
-            .unwrap()
-            .wait_with_output()
-            .unwrap();
-        if !cmd.status.success() {
-            eprintln!("Failed to execute debug cmd");
-            eprintln!("OUT: {}", String::from_utf8_lossy(&cmd.stdout));
-            eprintln!("ERR: {}", String::from_utf8_lossy(&cmd.stderr));
-        }
-        let (std_err, std_out) = std::env::var("LUMINARY_TEST_DUMP_OUTPUT").map(|_| {
-            (Stdio::inherit(), Stdio::inherit())
-        }).unwrap_or_else(|_| {
-            (Stdio::piped(), Stdio::piped())
-        });
-        let mut child = Command::new(&self.cmd)
-            .arg(&lua_path)
-            .arg("-r")
-            .arg(&self.static_runtime.parent().unwrap())
-            .arg("-o")
-            .arg(&out_path)
-            .arg("--intermediate-dir")
-            .arg(&inter_dir)
-            .stderr(std_err)
-            .stdout(std_out)
-            .spawn()
-            .unwrap();
-        let cmd = child.wait().unwrap();
-        if !cmd.success() {
-            if let Some(stdout) = child.stdout.take() {
-                let out: Vec<u8> = stdout.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-                eprintln!("OUT: {}", String::from_utf8_lossy(&out));
-            }
-            if let Some(stderr) = child.stderr.take() {
-                let out: Vec<u8> = stderr.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-                eprintln!("ERR: {}", String::from_utf8_lossy(&out));
-            }
-            panic!("Failed to execute cmd");
-        }
+        self.run_build_command(&lua_path, "ll", &self.static_runtime.parent().unwrap(), &inter_dir, &debug_path);
+        
+        self.run_build_command(&lua_path, "exe", &self.static_runtime.parent().unwrap(), &inter_dir, &out_path);
+        
         out_path
     }
 
@@ -240,29 +186,7 @@ impl TestConfig {
         let lua_path = self.base_dir.join("main.lua");
         std::fs::write(&lua_path, lua).unwrap();
         let out_path = self.base_dir.join("app");
-        let mut child = Command::new(&self.cmd)
-            .env("RUST_LOG", "trace")
-            .arg(&lua_path)
-            .arg("-r")
-            .arg(&self.dynamic_runtime.parent().unwrap())
-            .arg("-o")
-            .arg(&out_path)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let cmd = child.wait().unwrap();
-        if !cmd.success() {
-            if let Some(stdout) = child.stdout.take() {
-                let out: Vec<u8> = stdout.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-                eprintln!("OUT: {}", String::from_utf8_lossy(&out));
-            }
-            if let Some(stderr) = child.stderr.take() {
-                let out: Vec<u8> = stderr.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-                eprintln!("ERR: {}", String::from_utf8_lossy(&out));
-            }
-            panic!("Failed to execute cmd");
-        }
+        self.run_build_command(&lua_path, "exe", &self.dynamic_runtime.parent().unwrap(), &inter_dir, &out_path);
         out_path
     }
 
@@ -310,5 +234,52 @@ impl TestConfig {
             .unwrap()
             .wait_with_output()
             .unwrap()
+    }
+
+    #[track_caller]
+    pub fn run_build_command(
+        &self,
+        lua_path: impl AsRef<Path>,
+        out_format: &str,
+        runtime_dir: impl AsRef<Path>,
+        inter_dir: impl AsRef<Path>,
+        out_path: impl AsRef<Path>,
+    ) {
+        let (std_err, std_out) = std::env::var("LUMINARY_TEST_DUMP_OUTPUT").map(|_| {
+            (Stdio::inherit(), Stdio::inherit())
+        }).unwrap_or_else(|_| {
+            (Stdio::piped(), Stdio::piped())
+        });
+        let mut child = Command::new(&self.cmd)
+            .env("RUST_LOG", "trace")
+            .arg(lua_path.as_ref())
+            .arg("--filetype")
+            .arg(out_format)
+            .arg("-r")
+            .arg(runtime_dir.as_ref())
+            .arg("--intermediate-dir")
+            .arg(inter_dir.as_ref())
+            .arg("-o")
+            .arg(out_path.as_ref())
+            .stderr(std_err)
+            .stdout(std_out)
+            .spawn()
+            .unwrap();
+        let cmd = child.wait().unwrap();
+        if !cmd.success() {
+            if let Some(stdout) = child.stdout.take() {
+                let out: Vec<u8> = stdout.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
+                eprintln!("OUT: {}", String::from_utf8_lossy(&out));
+            }
+            if let Some(stderr) = child.stderr.take() {
+                let out: Vec<u8> = stderr.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
+                eprintln!("ERR: {}", String::from_utf8_lossy(&out));
+            }
+            panic!(
+                "Failed to execute cmd format: `{out_format}`\nrt: `{}`\nlua: {}",
+                runtime_dir.as_ref().display(),
+                lua_path.as_ref().display()
+            );
+        }
     }
 }
