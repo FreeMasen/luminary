@@ -117,8 +117,8 @@ jobs:
           submodules: recursive
       - name: "Install zstd aarch"
         run: |
-          brew fetch --force --bottle-tag=arm64_big_sur zstd
-          brew install $(brew --cache --bottle-tag=arm64_big_sur zstd)
+          brew fetch --force --bottle-tag=arm64_sonoma zstd
+          brew install $(brew --cache --bottle-tag=arm64_sonoma zstd)
       - name: "Install LLVM and Clang"
         id: "install"
         uses: "FreeMasen/llvm-install-action@v1.0.3"
