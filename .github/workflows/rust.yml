@@ -13,15 +13,13 @@ env:
 
 jobs:
   test_runtime:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
-      run: cargo test -p luminary-runtime --features runtime
+      run: cargo test-runtime
       env: 
         LUMINARY_PRINT_TVALUE: 1
   integration_tests:
@@ -43,10 +41,10 @@ jobs:
       with:
         version: 16.0.6
     - name: Run Link Integration Tests
-      run: cargo test --test link
+      run: cargo test-codegen --test link
     - name: Run Math Integration Tests
-      run: cargo test --test math
+      run: cargo test-codegen --test math
     - name: Run Basic Functions Integration Tests
-      run: cargo test --test basic_fns
+      run: cargo test-codegen --test basic_fns
     - name: Run Basic Functions Integration Tests
-      run: cargo test --test logic
+      run: cargo test-codegen --test logic
