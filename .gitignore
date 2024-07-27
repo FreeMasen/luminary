@@ -14,7 +14,6 @@
 /test-ir
 *.out
 /public
-.cargo/config.toml
 
 *.dll
 *.lib
