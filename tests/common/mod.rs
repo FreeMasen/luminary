@@ -236,7 +236,6 @@ impl TestConfig {
             } else {
                 self.dynamic_runtime.parent().unwrap().display().to_string()
             };
-            let path = std::env::var("LIBPATH").expect("LIBPATH is set");
             cmd.env(
                 "LIBPATH",
                 new_val,
