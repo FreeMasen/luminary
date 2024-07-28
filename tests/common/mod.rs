@@ -1,6 +1,11 @@
 #![allow(dead_code)]
 use std::{
-    fmt, io::Read, path::{Path, PathBuf}, process::{Child, Command, Output, Stdio}, sync::OnceLock, time::SystemTime
+    fmt,
+    io::Read,
+    path::{Path, PathBuf},
+    process::{Command, Output, Stdio},
+    sync::OnceLock,
+    time::SystemTime,
 };
 
 use escargot::format::Message;
@@ -173,10 +178,22 @@ impl TestConfig {
                     .to_string()
             });
         let debug_path = target_dir.join(format!("{file_name}.ll"));
-        self.run_build_command(&lua_path, "ll", &self.static_runtime.parent().unwrap(), &inter_dir, &debug_path);
-        
-        self.run_build_command(&lua_path, "exe", &self.static_runtime.parent().unwrap(), &inter_dir, &out_path);
-        
+        self.run_build_command(
+            &lua_path,
+            "ll",
+            &self.static_runtime.parent().unwrap(),
+            &inter_dir,
+            &debug_path,
+        );
+
+        self.run_build_command(
+            &lua_path,
+            "exe",
+            &self.static_runtime.parent().unwrap(),
+            &inter_dir,
+            &out_path,
+        );
+
         out_path
     }
 
@@ -186,7 +203,13 @@ impl TestConfig {
         let lua_path = self.base_dir.join("main.lua");
         std::fs::write(&lua_path, lua).unwrap();
         let out_path = self.base_dir.join("app");
-        self.run_build_command(&lua_path, "exe", &self.dynamic_runtime.parent().unwrap(), &inter_dir, &out_path);
+        self.run_build_command(
+            &lua_path,
+            "exe",
+            &self.dynamic_runtime.parent().unwrap(),
+            &inter_dir,
+            &out_path,
+        );
         out_path
     }
 
@@ -245,11 +268,9 @@ impl TestConfig {
         inter_dir: impl AsRef<Path>,
         out_path: impl AsRef<Path>,
     ) {
-        let (std_err, std_out) = std::env::var("LUMINARY_TEST_DUMP_OUTPUT").map(|_| {
-            (Stdio::inherit(), Stdio::inherit())
-        }).unwrap_or_else(|_| {
-            (Stdio::piped(), Stdio::piped())
-        });
+        let (std_err, std_out) = std::env::var("LUMINARY_TEST_DUMP_OUTPUT")
+            .map(|_| (Stdio::inherit(), Stdio::inherit()))
+            .unwrap_or_else(|_| (Stdio::piped(), Stdio::piped()));
         let mut child = Command::new(&self.cmd)
             .env("RUST_LOG", "trace")
             .arg(lua_path.as_ref())

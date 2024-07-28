@@ -90,7 +90,7 @@ fn main() {
         location,
         force,
     } = args;
-    
+
     let context = Context::create();
     let module = luminary::run_on(&context, input.clone());
     module.verify().unwrap_or_else(|e| {
@@ -147,17 +147,19 @@ fn main() {
             let (tmp_path, _tmp) = if let Some(tmp) = intermediate_dir {
                 std::fs::create_dir_all(&tmp).ok();
                 let mut rng = rand::thread_rng();
-                let rnd_name: String = (0..5).into_iter().map(|_| {
-                    char::from(if rng.r#gen() {
-                        rng.gen_range(97..=122)
-                    } else if rng.r#gen() {
-                        rng.gen_range(65..=90)
-                    } else {
-                        rng.gen_range(48..=57)
+                let rnd_name: String = (0..5)
+                    .map(|_| {
+                        char::from(if rng.r#gen() {
+                            rng.gen_range(97..=122)
+                        } else if rng.r#gen() {
+                            rng.gen_range(65..=90)
+                        } else {
+                            rng.gen_range(48..=57)
+                        })
                     })
-                }).collect();
+                    .collect();
                 let tmp_path = tmp.join(format!("{rnd_name}{obj_ext}"));
-                eprintln!("tmp!: {}", tmp_path.display());
+                tracing::debug!("tmp: {}", tmp_path.display());
                 std::fs::File::create(&tmp_path).unwrap();
                 (tmp_path, None)
             } else {
@@ -237,7 +239,7 @@ fn link_exe(
         for arg in cmd.get_args() {
             eprint!(r#" "{}""#, arg.to_str().unwrap())
         }
-        eprintln!("");
+        eprintln!();
         eprintln!("linking with clang failed with the following output:");
         std::fs::copy(obj_path, "failed-link.o").ok();
 
@@ -295,6 +297,7 @@ fn get_dest(dest: Option<&PathBuf>) -> Output {
         Output::File(
             OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .write(true)
                 .open(dest)
                 .unwrap(),

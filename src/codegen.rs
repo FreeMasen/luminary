@@ -396,7 +396,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         self.apply_attrs(&f);
     }
 
-    fn apply_attrs<'a>(&self, f: &FunctionValue<'a>) {
+    fn apply_attrs(&self, f: &FunctionValue) {
         apply_attrs_to_function(&self.context, f);
     }
 
@@ -480,10 +480,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     pub fn const_string(&self, value: &[u8]) -> ArrayValue<'ctx> {
-        let init = value
-            .into_iter()
-            .map(|b| self.const_u8(*b))
-            .collect::<Vec<_>>();
+        let init = value.iter().map(|b| self.const_u8(*b)).collect::<Vec<_>>();
         self.context.i8_type().const_array(&init)
     }
 

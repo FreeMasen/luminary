@@ -36,7 +36,7 @@ impl Error {
     }
 }
 
-pub fn run_on<'ctx>(context: &'ctx Context, path: PathBuf) -> Module<'ctx> {
+pub fn run_on(context: &Context, path: PathBuf) -> Module {
     inkwell::support::enable_llvm_pretty_stack_trace();
     let target_module =
         context.create_module(path.file_stem().expect("file_stem").to_str().unwrap());
@@ -47,7 +47,7 @@ pub fn run_on<'ctx>(context: &'ctx Context, path: PathBuf) -> Module<'ctx> {
     generator.into_module()
 }
 
-pub fn emit_code<'ctx>(generator: &CodeGenerator<'ctx>, lua: String) {
+pub fn emit_code(generator: &CodeGenerator, lua: String) {
     let mut variables = HashMap::new();
     let mut p = Parser::new(lua.as_bytes());
     generator.emit_main_and_move_to_entry();
@@ -62,14 +62,21 @@ pub fn emit_code<'ctx>(generator: &CodeGenerator<'ctx>, lua: String) {
             } => {
                 for (idx, target) in targets.iter().enumerate() {
                     let value = values.get(idx);
-                    emit_assignment(&generator, target, value, &mut variables);
+                    emit_assignment(generator, target, value, &mut variables);
                 }
             }
             Statement::Expression(Expression::FuncCall(call)) => {
                 let _success = emit_fn_call(generator, &call, &mut variables, "");
             }
             Statement::Expression(Expression::BinOp { left, op, right }) => {
-                let _success = emit_bin_op(generator, &*left, &*right, op, &mut variables, "");
+                let _success = emit_bin_op(
+                    generator,
+                    left.as_ref(),
+                    right.as_ref(),
+                    op,
+                    &mut variables,
+                    "",
+                );
             }
             Statement::Return(ret) => {
                 if let Some(first) = ret.0.first() {
@@ -120,8 +127,14 @@ pub fn emit_code<'ctx>(generator: &CodeGenerator<'ctx>, lua: String) {
                         Expression::TableCtor(_) => todo!(),
                         Expression::BinOp { left, op, right } => {
                             ret_zero = false;
-                            let success =
-                                emit_bin_op(generator, &*left, &*right, *op, &mut variables, "_");
+                            let success = emit_bin_op(
+                                generator,
+                                left.as_ref(),
+                                right.as_ref(),
+                                *op,
+                                &mut variables,
+                                "_",
+                            );
                             let f = generator.perform_to_number(success);
                             let i = generator.convert_float_to_i32(f);
                             generator.emit_return(Some(&i));
@@ -171,7 +184,7 @@ fn emit_print_call<'ctx>(
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
             let ptr = expression_to_ptr(
-                &generator,
+                generator,
                 exprs.first().unwrap_or(&Expression::Nil),
                 name_if_const,
                 vars,
@@ -200,8 +213,8 @@ fn emit_error_call<'ctx>(
         analisar::ast::Args::ExpList(exprs) => {
             let msg = exprs.first().unwrap_or(&Expression::Nil);
             let level = exprs.get(1).unwrap_or(&Expression::Nil);
-            let msg = expression_to_ptr(&generator, msg, "_", vars);
-            let level = expression_to_ptr(&generator, level, "_", vars);
+            let msg = expression_to_ptr(generator, msg, "_", vars);
+            let level = expression_to_ptr(generator, level, "_", vars);
             generator.perform_error(msg, level)
         }
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
@@ -226,8 +239,8 @@ fn emit_assert_call<'ctx>(
         analisar::ast::Args::ExpList(exprs) => {
             let v = exprs.first().unwrap_or(&Expression::Nil);
             let msg = exprs.get(1).unwrap_or(&Expression::Nil);
-            let v = expression_to_ptr(&generator, v, "_", vars);
-            let msg = expression_to_ptr(&generator, msg, "_", vars);
+            let v = expression_to_ptr(generator, v, "_", vars);
+            let msg = expression_to_ptr(generator, msg, "_", vars);
             generator.perform_assert(v, msg, name_if_const)
         }
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
@@ -252,7 +265,7 @@ fn emit_to_string_call<'ctx>(
     match &call.args {
         analisar::ast::Args::ExpList(exprs) => {
             let v = exprs.first().unwrap_or(&Expression::Nil);
-            let v = expression_to_ptr(&generator, v, "_", vars);
+            let v = expression_to_ptr(generator, v, "_", vars);
             generator.perform_to_string(v, dest);
         }
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
@@ -296,19 +309,19 @@ fn expression_to_ptr<'ctx>(
     vars: &mut HashMap<String, PointerValue<'ctx>>,
 ) -> PointerValue<'ctx> {
     match expr {
-        Expression::Nil => generator.alloca_tvalue(&name_if_const),
-        Expression::False => generator.init_tvalue_bool(false, &name_if_const),
-        Expression::True => generator.init_tvalue_bool(true, &name_if_const),
+        Expression::Nil => generator.alloca_tvalue(name_if_const),
+        Expression::False => generator.init_tvalue_bool(false, name_if_const),
+        Expression::True => generator.init_tvalue_bool(true, name_if_const),
         Expression::Numeral(n) => {
             if let Ok(i) = n.0.parse::<i64>() {
-                return generator.init_tvalue_int(i, &name_if_const);
+                return generator.init_tvalue_int(i, name_if_const);
             }
             let float: f64 = n.0.parse().expect("float value");
-            generator.init_tvalue_num(float, &name_if_const)
+            generator.init_tvalue_num(float, name_if_const)
         }
         Expression::LiteralString(s) => generator.init_tvalue_string(
-            &s.0.trim_with(|ch: char| ch == '"' || ch == '\''),
-            &name_if_const,
+            s.0.trim_with(|ch: char| ch == '"' || ch == '\''),
+            name_if_const,
         ),
         Expression::Name(n) => {
             let Some(ptr) = vars.get(&n.name[..]) else {
@@ -317,10 +330,10 @@ fn expression_to_ptr<'ctx>(
             *ptr
         }
         Expression::BinOp { left, op, right } => {
-            emit_bin_op(generator, left, right, *op, vars, &name_if_const)
+            emit_bin_op(generator, left, right, *op, vars, name_if_const)
         }
-        Expression::UnaryOp { op, exp } => emit_un_op(generator, exp, *op, vars, &name_if_const),
-        Expression::FuncCall(inner) => emit_fn_call(generator, inner, vars, &name_if_const),
+        Expression::UnaryOp { op, exp } => emit_un_op(generator, exp, *op, vars, name_if_const),
+        Expression::FuncCall(inner) => emit_fn_call(generator, inner, vars, name_if_const),
         _ => unimplemented!("expression_to_ptr: {expr:?}"),
     }
 }
@@ -334,8 +347,8 @@ fn emit_bin_op<'ctx>(
     name_if_const: &str,
 ) -> PointerValue<'ctx> {
     let op_name = CodeGenerator::binary_op_name(op);
-    let lhs = expression_to_ptr(&generator, left, "lhs", vars);
-    let rhs = expression_to_ptr(&generator, right, "rhs", vars);
+    let lhs = expression_to_ptr(generator, left, "lhs", vars);
+    let rhs = expression_to_ptr(generator, right, "rhs", vars);
     let dest = generator.alloca_tvalue(name_if_const);
     generator.perform_binary_op("success", op_name, lhs, rhs, dest);
     dest
@@ -349,7 +362,7 @@ fn emit_un_op<'ctx>(
     name_if_const: &str,
 ) -> PointerValue<'ctx> {
     let op_name = CodeGenerator::unary_op_name(op);
-    let lhs = expression_to_ptr(&generator, exp, "lhs", vars);
+    let lhs = expression_to_ptr(generator, exp, "lhs", vars);
     let dest = generator.alloca_tvalue(name_if_const);
     generator.perform_unary_op("success", op_name, lhs, dest);
     dest
