@@ -231,13 +231,15 @@ impl TestConfig {
         cmd.env("LD_LIBRARY_PATH", self.dynamic_runtime.parent().unwrap());
         #[cfg(target_os = "windows")]
         {
-            let path = std::env::var("LIB").expect("PATH is set");
+            let new_val = if let Ok(existing) = std::env::var("LIBPATH") {
+                format!("{existing};{}", self.dynamic_runtime.parent().unwrap().display())
+            } else {
+                self.dynamic_runtime.parent().unwrap().display().to_string()
+            };
+            let path = std::env::var("LIBPATH").expect("LIBPATH is set");
             cmd.env(
-                "LIB",
-                format!(
-                    "{path};{}",
-                    self.dynamic_runtime.parent().unwrap().display()
-                ),
+                "LIBPATH",
+                new_val,
             );
         }
         #[cfg(target_os = "macos")]
