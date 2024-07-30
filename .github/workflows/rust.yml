@@ -39,9 +39,13 @@ jobs:
       with:
         version: 16.0.6
     - name: brew install zstd
+      if: ${{ matrix.os == "macos-14" }}
       run: |
-        brew fetch --force --bottle-tag=arm64_sonoma zstd
-        brew install $(brew --cache --bottle-tag=arm64_sonoma zstd) --force
+        cat << EOF >Brewfile
+        brew "zstd"
+        EOF
+        
+        brew bundle install
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
