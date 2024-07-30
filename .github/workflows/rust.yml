@@ -39,7 +39,7 @@ jobs:
       with:
         version: 16.0.6
     - name: Install zstd
-      if: ${{ matrix.os == 'macos-latest' }}
+      if: ${{ matrix.os == 'macos-14' }}
       run: brew reinstall zstd
     - name: Run Link Integration Tests
       run: cargo test-codegen --test link
