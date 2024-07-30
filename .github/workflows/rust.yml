@@ -38,6 +38,10 @@ jobs:
       uses: FreeMasen/llvm-install-action@v1.0.3
       with:
         version: 16.0.6
+    - name: brew install zstd
+      run: |
+        brew fetch --force --bottle-tag=arm64_sonoma zstd
+        brew install $(brew --cache --bottle-tag=arm64_sonoma zstd) --force
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
