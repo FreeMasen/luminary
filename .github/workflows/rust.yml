@@ -50,7 +50,8 @@ jobs:
         brew "zstd"
         EOF
         
-        brew bundle install
+        brew bundle install \
+        && brew bundle exec -- /usr/bin/env
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
