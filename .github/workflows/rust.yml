@@ -50,14 +50,16 @@ jobs:
         brew "zstd"
         EOF
         
-        brew bundle install
+        bundle install
+    - name: Update env
+      run: brew bundle exec -- scripts/macos_build_env.sh
     - name: Build
-      run: brew bundle exec -- cargo build -p luminary
+      run: cargo build -p luminary
     - name: Run Link Integration Tests
-      run: brew bundle exec -- cargo test-codegen --test link
+      run: cargo test-codegen --test link
     - name: Run Math Integration Tests
-      run: brew bundle exec -- cargo test-codegen --test math
+      run: cargo test-codegen --test math
     - name: Run Basic Functions Integration Tests
-      run: brew bundle exec -- cargo test-codegen --test basic_fns
+      run: cargo test-codegen --test basic_fns
     - name: Run Basic Functions Integration Tests
-      run: brew bundle exec -- cargo test-codegen --test logic
+      run: cargo test-codegen --test logic
