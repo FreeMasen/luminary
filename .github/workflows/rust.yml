@@ -50,7 +50,7 @@ jobs:
         brew "zstd"
         EOF
         
-        brew bundle install
+        brew bundle install && xcode-select --install
     # - name: Update env
     #   if: ${{ matrix.os == 'macos-14' }}
     #   run: scripts/macos_build_env.sh
