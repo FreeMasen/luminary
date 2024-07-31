@@ -51,9 +51,9 @@ jobs:
         EOF
         
         brew bundle install
-    - name: Update env
-      if: ${{ matrix.os == 'macos-14' }}
-      run: scripts/macos_build_env.sh
+    # - name: Update env
+    #   if: ${{ matrix.os == 'macos-14' }}
+    #   run: scripts/macos_build_env.sh
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
