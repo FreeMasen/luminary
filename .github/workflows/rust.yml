@@ -51,7 +51,7 @@ jobs:
         EOF
         
         brew bundle install \
-        && brew bundle exec -- /usr/bin/env
+        && brew bundle exec -- /usr/bin/env >> $GITHUB_ENV
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
