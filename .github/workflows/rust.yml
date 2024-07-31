@@ -50,8 +50,9 @@ jobs:
         brew "zstd"
         EOF
         
-        bundle install
+        brew bundle install
     - name: Update env
+      if: ${{ matrix.os == 'macos-14' }}
       run: brew bundle exec -- scripts/macos_build_env.sh
     - name: Build
       run: cargo build -p luminary
