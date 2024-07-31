@@ -10,12 +10,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  PKG_CONFIG_PATH: '/opt/homebrew/opt/zstd/lib/pkgconfig:/opt/homebrew/opt/lz4/lib/pkgconfig:/opt/homebrew/opt/xz/lib/pkgconfig'
-  PKG_CONFIG_LIBDIR: '/usr/lib/pkgconfig:/opt/homebrew/Library/Homebrew/os/mac/pkgconfig/14'
-  OBJC: clang
-  CC: clang
-  OBJCXX: clang++
-  CXX: clang++
+  # PKG_CONFIG_PATH: '/opt/homebrew/opt/zstd/lib/pkgconfig:/opt/homebrew/opt/lz4/lib/pkgconfig:/opt/homebrew/opt/xz/lib/pkgconfig'
+  # PKG_CONFIG_LIBDIR: '/usr/lib/pkgconfig:/opt/homebrew/Library/Homebrew/os/mac/pkgconfig/14'
+  # OBJC: clang
+  # CC: clang
+  # OBJCXX: clang++
+  # CXX: clang++
 jobs:
   test_runtime:
     runs-on: ubuntu-latest
