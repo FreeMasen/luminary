@@ -50,10 +50,10 @@ jobs:
         brew "zstd"
         EOF
         
-        brew bundle install && xcode-select --install
-    # - name: Update env
-    #   if: ${{ matrix.os == 'macos-14' }}
-    #   run: scripts/macos_build_env.sh
+        brew bundle install \
+        && rm -rf /Library/Developer/CommandLineTools \
+        && Xcode-select --install
+
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
