@@ -52,7 +52,7 @@ jobs:
         
         brew bundle install \
         && rm -rf /Library/Developer/CommandLineTools \
-        && Xcode-select --install
+        && xcode-select --install
 
     - name: Build
       run: cargo build -p luminary
