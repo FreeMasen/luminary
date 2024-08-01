@@ -51,7 +51,7 @@ jobs:
         EOF
         
         brew bundle install \
-        && rm -rf /Library/Developer/CommandLineTools \
+        && sudo rm -rf /Library/Developer/CommandLineTools \
         && xcode-select --install
 
     - name: Build
