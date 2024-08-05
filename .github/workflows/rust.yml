@@ -43,17 +43,6 @@ jobs:
       uses: FreeMasen/llvm-install-action@v1.0.3
       with:
         version: 16.0.6
-    - name: brew install zstd
-      if: ${{ matrix.os == 'macos-14' }}
-      run: |
-        cat << EOF >Brewfile
-        brew "zstd"
-        EOF
-        
-        brew bundle install \
-        && sudo rm -rf /Library/Developer/CommandLineTools \
-        && xcode-select --install
-
     - name: Build
       run: cargo build -p luminary
     - name: Run Link Integration Tests
