@@ -231,6 +231,8 @@ fn link_exe(
     }
     #[cfg(target_os = "linux")]
     cmd.arg("-lm");
+    #[cfg(targte = "aarch64-apple-darwin")]
+    cmd.arg("-syslibroot").arg("/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk");
     cmd.arg("-lluminary_runtime");
     let child = cmd.spawn().unwrap();
     let clang_outout = child.wait_with_output().unwrap();
