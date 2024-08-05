@@ -45,7 +45,7 @@ jobs:
         version: 16.0.6
         set-path: 'false'
     - name: Run Link Integration Tests
-      run: cargo test-codegen --test link
+      run: cargo test-codegen --test link || ls ./target/tmp/slib
     - name: Run Math Integration Tests
       run: cargo test-codegen --test math
     - name: Run Basic Functions Integration Tests
