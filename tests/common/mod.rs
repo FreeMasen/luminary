@@ -99,10 +99,13 @@ pub fn setup(name: &str) -> TestConfig {
         .clone();
     let base_dir = temp_dir.join(name);
     std::fs::create_dir_all(&base_dir).unwrap();
+    let cmd = std::env::var("LUMINARY_CMD")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_BIN_EXE_luminary")));
     TestConfig {
         dynamic_runtime,
         static_runtime,
-        cmd: PathBuf::from(env!("CARGO_BIN_EXE_luminary")),
+        cmd,
         base_dir,
     }
 }
@@ -232,14 +235,14 @@ impl TestConfig {
         #[cfg(target_os = "windows")]
         {
             let new_val = if let Ok(existing) = std::env::var("LIBPATH") {
-                format!("{existing};{}", self.dynamic_runtime.parent().unwrap().display())
+                format!(
+                    "{existing};{}",
+                    self.dynamic_runtime.parent().unwrap().display()
+                )
             } else {
                 self.dynamic_runtime.parent().unwrap().display().to_string()
             };
-            cmd.env(
-                "LIBPATH",
-                new_val,
-            );
+            cmd.env("LIBPATH", new_val);
         }
         #[cfg(target_os = "macos")]
         {
