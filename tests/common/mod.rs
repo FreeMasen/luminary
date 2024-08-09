@@ -50,25 +50,10 @@ pub fn setup(name: &str) -> TestConfig {
                 let msg = msg.decode().expect("invalid message...");
                 if let Message::CompilerArtifact(art) = msg {
                     for file in &art.filenames {
-                        let Some(name) = file.file_stem() else {
-                            continue;
-                        };
-                        let Some(name) = name.to_str() else {
-                            continue;
-                        };
-                        if !name.ends_with("luminary_runtime") {
-                            continue;
-                        }
-                        let Some(ext) = file.extension() else {
-                            continue;
-                        };
-                        if ext == STATIC_EXT {
-                            static_path = Some(file.to_path_buf());
-                            continue;
-                        }
-                        if ext == DYNAMIC_EXT {
-                            dynamic_path = Some(file.to_path_buf());
-                            continue;
+                        match is_runtime(file) {
+                            Some(RuntimeKind::Dynamic) => dynamic_path = Some(file.to_path_buf()),
+                            Some(RuntimeKind::Static) => static_path = Some(file.to_path_buf()),
+                            None => continue,
                         }
                     }
                 }
@@ -108,6 +93,24 @@ pub fn setup(name: &str) -> TestConfig {
         cmd,
         base_dir,
     }
+}
+enum RuntimeKind {
+    Dynamic,
+    Static,
+}
+fn is_runtime(path: impl AsRef<Path>) -> Option<RuntimeKind> {
+    let file = path.as_ref();
+    let name = file.file_stem()?;
+    let name = name.to_str()?;
+    name.ends_with("luminary_runtime").then_some(())?;
+    let ext = file.extension()?;
+    if ext == STATIC_EXT {
+        return Some(RuntimeKind::Static)
+    }
+    if ext == DYNAMIC_EXT {
+        return Some(RuntimeKind::Dynamic)
+    }
+    None
 }
 
 #[track_caller]

@@ -2,4 +2,4 @@
   id: install
   uses: FreeMasen/llvm-install-action@v1.0.3
   with:
-    version: 16.0.6
+    version: 18.1.8

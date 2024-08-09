@@ -44,7 +44,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
         let nil = module.add_function(
             runtime::INIT,
             c.void_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+                .fn_type(&[c.ptr_type(Default::default()).into()], false),
             None,
         );
         apply_attrs_to_function(&c, &nil);
@@ -52,7 +52,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             runtime::INIT_BOOL,
             c.void_type().fn_type(
                 &[
-                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
                     c.bool_type().into(),
                 ],
                 false,
@@ -64,7 +64,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             runtime::INIT_INT,
             c.void_type().fn_type(
                 &[
-                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
                     c.i64_type().into(),
                 ],
                 false,
@@ -76,7 +76,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
             runtime::INIT_FLOAT,
             c.void_type().fn_type(
                 &[
-                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
                     c.f64_type().into(),
                 ],
                 false,
@@ -88,9 +88,9 @@ impl<'ctx> ExpectedCtors<'ctx> {
             runtime::INIT_STR,
             c.void_type().fn_type(
                 &[
-                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
                     c.i32_type().into(),
-                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
                 ],
                 false,
             ),
@@ -113,13 +113,13 @@ impl<'ctx> ExpectedHelpers<'ctx> {
         let print = module.add_function(
             runtime::PRINTLN,
             c.void_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+                .fn_type(&[c.ptr_type(Default::default()).into()], false),
             None,
         );
         let print_err_msg = module.add_function(
             runtime::PRINT_ERROR_MESSAGE,
             c.void_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+                .fn_type(&[c.ptr_type(Default::default()).into()], false),
             None,
         );
         let tvalue_size =
@@ -128,27 +128,27 @@ impl<'ctx> ExpectedHelpers<'ctx> {
         module.add_function(
             "printf",
             c.i32_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], true),
+                .fn_type(&[c.ptr_type(Default::default()).into()], true),
             None,
         );
         let to_number = module.add_function(
             runtime::math::TO_NUMBER,
             c.f64_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+                .fn_type(&[c.ptr_type(Default::default()).into()], false),
             None,
         );
         let is_truthy = module.add_function(
             runtime::IS_TRUTHY,
             c.bool_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+                .fn_type(&[c.ptr_type(Default::default()).into()], false),
             None,
         );
         let to_string = module.add_function(
             runtime::TO_STRING,
             c.void_type().fn_type(
                 &[
-                    c.i8_type().ptr_type(Default::default()).into(),
-                    c.i8_type().ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
+                    c.ptr_type(Default::default()).into(),
                 ],
                 false,
             ),
@@ -157,7 +157,7 @@ impl<'ctx> ExpectedHelpers<'ctx> {
         let get_tag = module.add_function(
             runtime::GET_TAG,
             c.i8_type()
-                .fn_type(&[c.i8_type().ptr_type(Default::default()).into()], false),
+                .fn_type(&[c.ptr_type(Default::default()).into()], false),
             None,
         );
         apply_attrs_to_function(&c, &print);
@@ -204,9 +204,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                 name,
                 context.void_type().fn_type(
                     &[
-                        context.i8_type().ptr_type(Default::default()).into(),
-                        context.i8_type().ptr_type(Default::default()).into(),
-                        context.i8_type().ptr_type(Default::default()).into(),
+                        context.ptr_type(Default::default()).into(),
+                        context.ptr_type(Default::default()).into(),
+                        context.ptr_type(Default::default()).into(),
                     ],
                     false,
                 ),
@@ -219,8 +219,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                 name,
                 context.void_type().fn_type(
                     &[
-                        context.i8_type().ptr_type(Default::default()).into(),
-                        context.i8_type().ptr_type(Default::default()).into(),
+                        context.ptr_type(Default::default()).into(),
+                        context.ptr_type(Default::default()).into(),
                     ],
                     false,
                 ),
@@ -420,7 +420,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     pub fn ptr_type(&self) -> PointerType<'ctx> {
-        self.context.i8_type().ptr_type(Default::default())
+        self.context.ptr_type(Default::default())
     }
 
     pub fn i8_type(&self) -> IntType<'ctx> {

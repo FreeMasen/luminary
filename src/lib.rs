@@ -198,8 +198,7 @@ fn emit_print_call<'ctx>(
         }
     }
     generator
-        .i8_type()
-        .ptr_type(Default::default())
+        .ptr_type()
         .const_null()
 }
 
@@ -221,8 +220,7 @@ fn emit_error_call<'ctx>(
         analisar::ast::Args::String(lit) => {
             let v = generator.init_tvalue_string(&lit.0, "_");
             let msg = generator
-                .i8_type()
-                .ptr_type(Default::default())
+                .ptr_type()
                 .const_null();
             generator.perform_error(v, msg)
         }
@@ -247,8 +245,7 @@ fn emit_assert_call<'ctx>(
         analisar::ast::Args::String(lit) => {
             let v = generator.init_tvalue_string(&lit.0, "_");
             let msg = generator
-                .i8_type()
-                .ptr_type(Default::default())
+                .ptr_type()
                 .const_null();
             generator.perform_assert(v, msg, name_if_const)
         }
