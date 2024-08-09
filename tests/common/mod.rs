@@ -237,7 +237,7 @@ impl TestConfig {
         cmd.env("LD_LIBRARY_PATH", self.dynamic_runtime.parent().unwrap());
         #[cfg(target_os = "windows")]
         {
-            let new_val = if let Ok(existing) = std::env::var("LIBPATH") {
+            let new_val = if let Ok(existing) = std::env::var("PATH") {
                 format!(
                     "{existing};{}",
                     self.dynamic_runtime.parent().unwrap().display()
