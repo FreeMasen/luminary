@@ -8,13 +8,9 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use inkwell::{
-    context::Context,
-    memory_buffer::MemoryBuffer,
-    module::Module,
-    targets::{
+    context::Context, memory_buffer::MemoryBuffer, module::Module, passes::PassManager, targets::{
         CodeModel, FileType as LlvmFileType, InitializationConfig, RelocMode, Target, TargetMachine,
-    },
-    OptimizationLevel,
+    }, OptimizationLevel
 };
 use rand::Rng;
 
@@ -150,11 +146,11 @@ fn main() {
                 let rnd_name: String = (0..5)
                     .map(|_| {
                         char::from(if rng.r#gen() {
-                            rng.gen_range(97..=122)
+                            rng.gen_range(b'a'..=b'z')
                         } else if rng.r#gen() {
-                            rng.gen_range(65..=90)
+                            rng.gen_range(b'A'..=b'Z')
                         } else {
-                            rng.gen_range(48..=57)
+                            rng.gen_range(b'0'..=b'9')
                         })
                     })
                     .collect();
@@ -221,7 +217,7 @@ fn link_exe(
     }
     if let Some(runtime_path) = runtime_path {
         let runtime_path = runtime_path.canonicalize().expect("valid runtime path");
-        cmd.arg(format!("-L{}", runtime_path.display()));
+        cmd.arg("-L").arg(&runtime_path);
     }
     for l in library {
         cmd.arg("-l").arg(l);
