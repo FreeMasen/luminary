@@ -216,9 +216,8 @@ fn link_exe(
         cmd.arg("--verbose");
     }
     if let Some(runtime_path) = runtime_path {
-        println!("setting runtime path {}", runtime_path.display());
+        #[cfg(not(target_os = "windows"))]
         let runtime_path = runtime_path.canonicalize().expect("valid runtime path");
-        println!("cannon runtime path {}", runtime_path.display());
         cmd.arg("-L").arg(&runtime_path);
     }
     for l in library {
