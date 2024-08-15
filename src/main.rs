@@ -8,7 +8,7 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use inkwell::{
-    context::Context, memory_buffer::MemoryBuffer, module::Module, passes::PassManager, targets::{
+    context::Context, memory_buffer::MemoryBuffer, module::Module, targets::{
         CodeModel, FileType as LlvmFileType, InitializationConfig, RelocMode, Target, TargetMachine,
     }, OptimizationLevel
 };
@@ -85,6 +85,8 @@ fn main() {
         library,
         location,
         force,
+        #[cfg(target_os = "windows")]
+        dynamic_runtime,
     } = args;
 
     let context = Context::create();
@@ -193,6 +195,7 @@ fn main() {
     }
 }
 
+#[cfg(unix)]
 fn link_exe(
     obj_path: &Path,
     dest: &PathBuf,
@@ -216,8 +219,7 @@ fn link_exe(
         cmd.arg("--verbose");
     }
     if let Some(runtime_path) = runtime_path {
-        #[cfg(not(target_os = "windows"))]
-        let runtime_path = runtime_path.canonicalize().expect("valid runtime path");
+        let runtime_path = dunce::canonicalize(runtime_path).unwrap();
         cmd.arg("-L").arg(&runtime_path);
     }
     for l in library {
@@ -249,6 +251,99 @@ fn link_exe(
             eprintln!("{stderr}");
         }
         if !clang_verbose {
+            eprintln!("NOTE: set LUMINARY_USE_VERBOSE_CLANG=1 for more details");
+        }
+        if runtime_path.is_none() {
+            eprintln!("HINT: setting the argument --runtime-location to the directory containing libluminary_runtime.a|o might help");
+        }
+        std::process::exit(1);
+    } else {
+        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
+    }
+}
+
+
+/*
+"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\bin\\Hostx64\\x64\\link.exe" 
+"-out:D:\\a\\luminary\\luminary\\target\\tmp\\linking_works\\app"
+-defaultlib:libcmt 
+-defaultlib:oldnames 
+"-libpath:C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\lib\\x64" 
+"-libpath:C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\atlmfc\\lib\\x64" 
+"-libpath:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.22621.0\\ucrt\\x64" 
+"-libpath:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.22621.0\\um\\x64" 
+"-libpath:C:\\Program Files\\LLVM\\lib\\clang\\18\\lib\\windows" 
+"-libpath:D:\\a\\luminary\\luminary\\target\\tmp\\slib" 
+-nologo "D:\\a\\luminary\\luminary\\target\\tmp\\linking_works\\inter\\FfTq6.obj" 
+luminary_runtime.lib
+*/
+#[cfg(windows)]
+fn link_exe(
+    obj_path: &Path,
+    dest: &PathBuf,
+    runtime_path: Option<&PathBuf>,
+    library: &[String],
+    location: &[PathBuf],
+) {
+    if !obj_path.exists() {
+        panic!("object path does not exist at {}", obj_path.display());
+    }
+    let mut cmd = Command::new("link.exe");
+    cmd.arg(&format!("-out:{}", dest.display()))
+        .arg("/DEFAULTLIB:libcmt")
+        .arg("/DEFAULTLIB:oldnames")
+        .arg("/NOLOGO")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let link_verbose = std::env::var("LUMINARY_USE_VERBOSE_LINK")
+        .map(|s| !s.is_empty() && s != "0")
+        .unwrap_or(false);
+    if link_verbose {
+        cmd.arg("/VERBOSE")
+    }
+    // if let Ok(path) = std::env::var("PATH") {
+    //     let roots = std::collections::HashSet::new();
+    //     for p in path.split(":") {
+    //         let p = PathBuf::from(p);
+    //         if let Some(drive) = p.ancestors().find(|s| s.ends_with(':')) {
+    //             roots.insert(drive);
+    //         }
+    //     }
+    // }
+    if let Some(runtime_path) = runtime_path {
+        let runtime_path = dunce::canonicalize(runtime_path).unwrap();
+        cmd.arg(&format!("/LIBPATH:{}", runtime_path.display()));
+    }
+    for l in library {
+        cmd.arg(&format!("/LIBPATH:{}", l.display())).arg(l);
+    }
+    let runtime_extension = std::fs::read_dir(runtime_path).find_map(|e| {
+        let e = e.ok()?;
+        e.path().extension().filter_map(|ext| {
+            let ext = ext.to_str()?;
+            ext == "dll" || ext == "lib"
+        }).to_owned()
+    }).unwrap_or_else(|| "lib".to_string());
+    cmd.arg(format!("luminary_runtime.{runtime_extension}"));
+    let outout = child.wait_with_output().unwrap();
+    if !outout.status.success() {
+        eprint!("clang");
+        for arg in cmd.get_args() {
+            eprint!(r#" "{}""#, arg.to_str().unwrap())
+        }
+        eprintln!();
+        eprintln!("linking with clang failed with the following output:");
+        std::fs::copy(obj_path, "failed-link.o").ok();
+
+        let stdout = String::from_utf8_lossy(&outout.stdout);
+        let stderr = String::from_utf8_lossy(&outout.stderr);
+        if !stdout.is_empty() {
+            eprintln!("{stdout}",);
+        }
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+        if !link_verbose {
             eprintln!("NOTE: set LUMINARY_USE_VERBOSE_CLANG=1 for more details");
         }
         if runtime_path.is_none() {
