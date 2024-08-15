@@ -318,7 +318,7 @@ fn link_exe(
         cmd.arg(&format!("/LIBPATH:{}", runtime_path.display()));
     }
     for l in library {
-        cmd.arg(&format!("/LIBPATH:{}", l.display())).arg(l);
+        cmd.arg(&format!("/LIBPATH:{l}")).arg(l);
     }
 
     let runtime_extension = runtime_path
@@ -327,7 +327,7 @@ fn link_exe(
             let e = e.ok()?;
             e.path()
                 .extension()
-                .filter_map(|ext| {
+                .is_some_and(|ext| {
                     let ext = ext.to_str()?;
                     ext == "dll" || ext == "lib"
                 })
