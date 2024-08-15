@@ -322,7 +322,7 @@ fn link_exe(
     }
 
     let runtime_extension = runtime_path
-        .and_then(|v| std::fs::read_dir(runtime_path).ok())
+        .and_then(|v| std::fs::read_dir(v).ok())
         .find_map(|e| {
             let e = e.ok()?;
             e.path()
