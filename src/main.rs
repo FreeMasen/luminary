@@ -89,8 +89,6 @@ fn main() {
         library,
         location,
         force,
-        #[cfg(target_os = "windows")]
-        dynamic_runtime,
     } = args;
 
     let context = Context::create();
@@ -320,10 +318,9 @@ fn link_exe(
     for l in library {
         cmd.arg(&format!("/LIBPATH:{l}")).arg(l);
     }
-
     let runtime_extension = runtime_path
         .and_then(|v| std::fs::read_dir(v).ok())
-        .find_map(|e| {
+        .is_some_and(|e| {
             let e = e.ok()?;
             e.path()
                 .extension()
@@ -335,7 +332,7 @@ fn link_exe(
         })
         .unwrap_or_else(|| "lib".to_string());
     cmd.arg(format!("luminary_runtime.{runtime_extension}"));
-    let outout = child.wait_with_output().unwrap();
+    let outout = cmd.spawn().unwrap().wait_with_output().unwrap();
     if !outout.status.success() {
         eprint!("clang");
         for arg in cmd.get_args() {
@@ -361,7 +358,7 @@ fn link_exe(
         }
         std::process::exit(1);
     } else {
-        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
+        println!("{}", String::from_utf8_lossy(&output.stdout));
     }
 }
 
