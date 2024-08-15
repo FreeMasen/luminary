@@ -317,7 +317,7 @@ fn link_exe(
     for l in library {
         cmd.arg(&format!("/LIBPATH:{}", l.display())).arg(l);
     }
-    let runtime_extension = std::fs::read_dir(runtime_path).find_map(|e| {
+    let runtime_extension = std::fs::read_dir(runtime_path).unwrap().find_map(|e| {
         let e = e.ok()?;
         e.path().extension().filter_map(|ext| {
             let ext = ext.to_str()?;
