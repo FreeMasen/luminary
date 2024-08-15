@@ -8,9 +8,13 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use inkwell::{
-    context::Context, memory_buffer::MemoryBuffer, module::Module, targets::{
+    context::Context,
+    memory_buffer::MemoryBuffer,
+    module::Module,
+    targets::{
         CodeModel, FileType as LlvmFileType, InitializationConfig, RelocMode, Target, TargetMachine,
-    }, OptimizationLevel
+    },
+    OptimizationLevel,
 };
 use rand::Rng;
 
@@ -262,19 +266,18 @@ fn link_exe(
     }
 }
 
-
 /*
-"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\bin\\Hostx64\\x64\\link.exe" 
+"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\bin\\Hostx64\\x64\\link.exe"
 "-out:D:\\a\\luminary\\luminary\\target\\tmp\\linking_works\\app"
--defaultlib:libcmt 
--defaultlib:oldnames 
-"-libpath:C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\lib\\x64" 
-"-libpath:C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\atlmfc\\lib\\x64" 
-"-libpath:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.22621.0\\ucrt\\x64" 
-"-libpath:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.22621.0\\um\\x64" 
-"-libpath:C:\\Program Files\\LLVM\\lib\\clang\\18\\lib\\windows" 
-"-libpath:D:\\a\\luminary\\luminary\\target\\tmp\\slib" 
--nologo "D:\\a\\luminary\\luminary\\target\\tmp\\linking_works\\inter\\FfTq6.obj" 
+-defaultlib:libcmt
+-defaultlib:oldnames
+"-libpath:C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\lib\\x64"
+"-libpath:C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.40.33807\\atlmfc\\lib\\x64"
+"-libpath:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.22621.0\\ucrt\\x64"
+"-libpath:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.22621.0\\um\\x64"
+"-libpath:C:\\Program Files\\LLVM\\lib\\clang\\18\\lib\\windows"
+"-libpath:D:\\a\\luminary\\luminary\\target\\tmp\\slib"
+-nologo "D:\\a\\luminary\\luminary\\target\\tmp\\linking_works\\inter\\FfTq6.obj"
 luminary_runtime.lib
 */
 #[cfg(windows)]
@@ -317,13 +320,20 @@ fn link_exe(
     for l in library {
         cmd.arg(&format!("/LIBPATH:{}", l.display())).arg(l);
     }
-    let runtime_extension = std::fs::read_dir(runtime_path).unwrap().find_map(|e| {
-        let e = e.ok()?;
-        e.path().extension().filter_map(|ext| {
-            let ext = ext.to_str()?;
-            ext == "dll" || ext == "lib"
-        }).to_owned()
-    }).unwrap_or_else(|| "lib".to_string());
+
+    let runtime_extension = runtime_path
+        .and_then(|v| std::fs::read_dir(runtime_path).ok())
+        .find_map(|e| {
+            let e = e.ok()?;
+            e.path()
+                .extension()
+                .filter_map(|ext| {
+                    let ext = ext.to_str()?;
+                    ext == "dll" || ext == "lib"
+                })
+                .to_owned()
+        })
+        .unwrap_or_else(|| "lib".to_string());
     cmd.arg(format!("luminary_runtime.{runtime_extension}"));
     let outout = child.wait_with_output().unwrap();
     if !outout.status.success() {

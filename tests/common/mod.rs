@@ -105,10 +105,10 @@ fn is_runtime(path: impl AsRef<Path>) -> Option<RuntimeKind> {
     name.ends_with("luminary_runtime").then_some(())?;
     let ext = file.extension()?;
     if ext == STATIC_EXT {
-        return Some(RuntimeKind::Static)
+        return Some(RuntimeKind::Static);
     }
     if ext == DYNAMIC_EXT {
-        return Some(RuntimeKind::Dynamic)
+        return Some(RuntimeKind::Dynamic);
     }
     None
 }

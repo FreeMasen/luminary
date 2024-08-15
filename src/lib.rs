@@ -197,9 +197,7 @@ fn emit_print_call<'ctx>(
             generator.perform_print(ptr);
         }
     }
-    generator
-        .ptr_type()
-        .const_null()
+    generator.ptr_type().const_null()
 }
 
 fn emit_error_call<'ctx>(
@@ -219,9 +217,7 @@ fn emit_error_call<'ctx>(
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
         analisar::ast::Args::String(lit) => {
             let v = generator.init_tvalue_string(&lit.0, "_");
-            let msg = generator
-                .ptr_type()
-                .const_null();
+            let msg = generator.ptr_type().const_null();
             generator.perform_error(v, msg)
         }
     }
@@ -244,9 +240,7 @@ fn emit_assert_call<'ctx>(
         analisar::ast::Args::Table(_) => panic!("tables unsupported"),
         analisar::ast::Args::String(lit) => {
             let v = generator.init_tvalue_string(&lit.0, "_");
-            let msg = generator
-                .ptr_type()
-                .const_null();
+            let msg = generator.ptr_type().const_null();
             generator.perform_assert(v, msg, name_if_const)
         }
     }

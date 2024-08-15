@@ -51,10 +51,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
         let bool = module.add_function(
             runtime::INIT_BOOL,
             c.void_type().fn_type(
-                &[
-                    c.ptr_type(Default::default()).into(),
-                    c.bool_type().into(),
-                ],
+                &[c.ptr_type(Default::default()).into(), c.bool_type().into()],
                 false,
             ),
             None,
@@ -63,10 +60,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
         let int = module.add_function(
             runtime::INIT_INT,
             c.void_type().fn_type(
-                &[
-                    c.ptr_type(Default::default()).into(),
-                    c.i64_type().into(),
-                ],
+                &[c.ptr_type(Default::default()).into(), c.i64_type().into()],
                 false,
             ),
             None,
@@ -75,10 +69,7 @@ impl<'ctx> ExpectedCtors<'ctx> {
         let float = module.add_function(
             runtime::INIT_FLOAT,
             c.void_type().fn_type(
-                &[
-                    c.ptr_type(Default::default()).into(),
-                    c.f64_type().into(),
-                ],
+                &[c.ptr_type(Default::default()).into(), c.f64_type().into()],
                 false,
             ),
             None,
