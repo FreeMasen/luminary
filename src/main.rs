@@ -311,29 +311,32 @@ fn link_exe(
     //         }
     //     }
     // }
-    if let Some(runtime_path) = runtime_path {
+    let runtime_file_name = if let Some(runtime_path) = runtime_path {
         let runtime_path = dunce::canonicalize(runtime_path).unwrap();
         cmd.arg(&format!("/LIBPATH:{}", runtime_path.display()));
+        let ext = std::fs::read_dir(&runtime_path)
+            .unwrap()
+            .find_map(|e| {
+                let e = e.ok()?;
+                e.path().extension().and_then(|ext| {
+                    let ext = ext.to_str()?;
+                    (ext == "dll" || ext == "lib").then(|| ext.to_string())
+                })
+            })
+            .unwrap_or_else(|| "lib".to_string());
+        format!("luminary_runtime.{ext}")
+    } else {
+        "luminary_runtime.lib".to_string()
+    };
+    for l in location {
+        cmd.arg(&format!("/LIBPATH:{}", l.display()));
     }
     for l in library {
-        cmd.arg(&format!("/LIBPATH:{l}")).arg(l);
+        cmd.arg(l);
     }
-    let runtime_extension = runtime_path
-        .and_then(|v| std::fs::read_dir(v).ok())
-        .is_some_and(|e| {
-            let e = e.ok()?;
-            e.path()
-                .extension()
-                .is_some_and(|ext| {
-                    let ext = ext.to_str()?;
-                    ext == "dll" || ext == "lib"
-                })
-                .to_owned()
-        })
-        .unwrap_or_else(|| "lib".to_string());
-    cmd.arg(format!("luminary_runtime.{runtime_extension}"));
-    let outout = cmd.spawn().unwrap().wait_with_output().unwrap();
-    if !outout.status.success() {
+    cmd.arg(runtime_file_name);
+    let output = cmd.spawn().unwrap().wait_with_output().unwrap();
+    if !output.status.success() {
         eprint!("clang");
         for arg in cmd.get_args() {
             eprint!(r#" "{}""#, arg.to_str().unwrap())
@@ -342,8 +345,8 @@ fn link_exe(
         eprintln!("linking with clang failed with the following output:");
         std::fs::copy(obj_path, "failed-link.o").ok();
 
-        let stdout = String::from_utf8_lossy(&outout.stdout);
-        let stderr = String::from_utf8_lossy(&outout.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
         if !stdout.is_empty() {
             eprintln!("{stdout}",);
         }
