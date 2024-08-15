@@ -299,7 +299,7 @@ fn link_exe(
         .map(|s| !s.is_empty() && s != "0")
         .unwrap_or(false);
     if link_verbose {
-        cmd.arg("/VERBOSE")
+        cmd.arg("/VERBOSE");
     }
     // if let Ok(path) = std::env::var("PATH") {
     //     let roots = std::collections::HashSet::new();
