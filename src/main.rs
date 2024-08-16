@@ -290,7 +290,7 @@ fn link_exe(
         panic!("object path does not exist at {}", obj_path.display());
     }
     let mut cmd = Command::new("link.exe");
-    cmd.arg(&format!("-out:{}", dest.display()))
+    cmd.arg(&format!("/OUT:{}", dest.display()))
         .arg("/DEFAULTLIB:libcmt")
         .arg("/DEFAULTLIB:oldnames")
         .arg("/NOLOGO")
