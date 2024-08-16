@@ -292,7 +292,7 @@ fn link_exe(
     let mut cmd = Command::new("link.exe");
     cmd.arg(&format!("/OUT:{}", dest.display()))
         .arg("/DEFAULTLIB:libcmt")
-        .arg("/DEFAULTLIB:oldnames")
+        // .arg("/DEFAULTLIB:oldnames")
         .arg("/NOLOGO")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -335,9 +335,10 @@ fn link_exe(
         cmd.arg(l);
     }
     cmd.arg(runtime_file_name);
+    cmd.arg(obj_path);
     let output = cmd.spawn().unwrap().wait_with_output().unwrap();
     if !output.status.success() {
-        eprint!("clang");
+        eprint!("link.exe");
         for arg in cmd.get_args() {
             eprint!(r#" "{}""#, arg.to_str().unwrap())
         }
