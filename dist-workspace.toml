@@ -4,7 +4,7 @@ members = ["cargo:."]
 # Config for 'cargo dist'
 [dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.20.0-prerelease.8"
+cargo-dist-version = "0.21.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -15,7 +15,7 @@ tap = "FreeMasen/homebrew-tap"
 publish-jobs = ["homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-# Publish jobs to run in CI
+# Which actions to run on pull requests
 pr-run-mode = "upload"
 # Whether +crt-static should be used on msvc
 msvc-crt-static = false
