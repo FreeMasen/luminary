@@ -38,11 +38,11 @@ jobs:
       LUMINARY_USE_VERBOSE_CLANG: 1
     steps:
     - uses: actions/checkout@v3
-    - name: Install LLVM and Clang (Linux)
+    - name: Install LLVM and Clang
       id: install
       uses: FreeMasen/llvm-install-action@v1.0.5
       with:
-        version: 18.1.8
+        version: ${{ (matrix.os == 'windows-latest' && '18.1.8') || '18.1.8' }}
         set-path: 'false'
     - name: Run Link Integration Tests
       run: cargo test-codegen --test link || ls ./target/tmp/slib
