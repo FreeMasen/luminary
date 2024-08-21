@@ -245,7 +245,7 @@ impl TestConfig {
             } else {
                 self.dynamic_runtime.parent().unwrap().display().to_string()
             };
-            cmd.env("LIBPATH", new_val);
+            cmd.env("PATH", new_val);
         }
         #[cfg(target_os = "macos")]
         {
