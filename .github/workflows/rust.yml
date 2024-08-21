@@ -43,7 +43,7 @@ jobs:
       uses: FreeMasen/llvm-install-action@v1.0.5
       with:
         version: ${{ (matrix.os == 'windows-latest' && '18.1.7') || '18.1.8' }}
-        set-path: 'false'
+        set-path: ${{ (matrix.os == 'windows-latest' && 'true') || 'false' }}
     - name: Run Link Integration Tests
       run: cargo test-codegen --test link || ls ./target/tmp/slib
     - name: Run Math Integration Tests
