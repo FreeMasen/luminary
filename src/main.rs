@@ -237,7 +237,7 @@ fn link_exe(
     cfg_if! {
         if #[cfg(target_os = "windows")] {
             if runtime_path.map(|rt| rt.join("luminary_runtime.dll.lib").exists()).unwrap_or(false) {
-                cmd.arg("-llluminary_runtime.dll")           
+                cmd.arg("-llluminary_runtime.dll");
             } else {
                 cmd.arg("-lluminary_runtime");
             }
