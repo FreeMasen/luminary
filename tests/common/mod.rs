@@ -38,6 +38,7 @@ pub fn setup(name: &str) -> TestConfig {
         .get_or_init(|| {
             let mut static_path: Option<PathBuf> = None;
             let mut dynamic_path: Option<PathBuf> = None;
+            let mut dynamic_defs: Option<PathBuf> = None;
             let runtime_build = escargot::CargoBuild::new()
                 .features("runtime")
                 .arg("-p")
@@ -53,6 +54,7 @@ pub fn setup(name: &str) -> TestConfig {
                         match is_runtime(file) {
                             Some(RuntimeKind::Dynamic) => dynamic_path = Some(file.to_path_buf()),
                             Some(RuntimeKind::Static) => static_path = Some(file.to_path_buf()),
+                            Some(RuntimeKind::DynamicDefs) => dynamic_defs = Some(file.to_path_buf()),
                             None => continue,
                         }
                     }
@@ -75,7 +77,9 @@ pub fn setup(name: &str) -> TestConfig {
             };
             let dynamic_runtime = dynamic_path.expect("Didn't generate a dynamic runtime lib");
             let static_runtime = static_path.expect("Didn't generate a static runtime");
-
+            if let Some(dynamic_defs) = dynamic_defs {
+                copy_and_create("slib", &dynamic_defs);
+            }
             (
                 copy_and_create("lib", &static_runtime),
                 copy_and_create("slib", &dynamic_runtime),
@@ -97,12 +101,17 @@ pub fn setup(name: &str) -> TestConfig {
 enum RuntimeKind {
     Dynamic,
     Static,
+    DynamicDefs,
 }
 fn is_runtime(path: impl AsRef<Path>) -> Option<RuntimeKind> {
     let file = path.as_ref();
+    if file.ends_with("luminary_runtime.dll.lib") {
+        return Some(RuntimeKind::DynamicDefs)
+    }
     let name = file.file_stem()?;
     let name = name.to_str()?;
     name.ends_with("luminary_runtime").then_some(())?;
+    
     let ext = file.extension()?;
     if ext == STATIC_EXT {
         return Some(RuntimeKind::Static);
@@ -155,7 +164,7 @@ pub fn panic_for(output: &Output, msg: impl fmt::Display) {
     )
 }
 
-impl TestConfig {
+impl TestConfig {  
     pub fn run_lua(&self, lua: &str) -> (Output, Output) {
         let dynamic = self.build_dynamic(lua);
         let dynamic = self.run_dynamic(&dynamic);
