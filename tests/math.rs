@@ -105,13 +105,14 @@ where
     let name = format!("{name}_{lhs}_{rhs}");
     let test = common::setup(name.as_str());
     let expected: R = l.load(&expr).eval().map(|v: R| v).unwrap_or_default();
-    let (d, s) = test.run_lua(&script);
-    check_test(&d);
-    check_test(&s);
-    let (v1, v_str1) = convert_stdout(&d.stdout).unwrap();
-    let (v2, v_str2) = convert_stdout(&s.stdout).unwrap();
-    check_converted(v1, expected, &v_str1)?;
+    let res = test.run_lua(&script);
+    res.check_return_code(0);
+    let (v2, v_str2) = convert_stdout(&res.stat.stdout).unwrap();
     check_converted(v2, expected, &v_str2)?;
+    if let Some(dynamic) = &res.dynamic {
+        let (v1, v_str1) = convert_stdout(&dynamic.stdout).unwrap();
+        check_converted(v1, expected, &v_str1)?;
+    }
     Ok(())
 }
 

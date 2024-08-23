@@ -6,7 +6,6 @@ use std::{
     process::{Command, Stdio},
 };
 
-use cfg_if::cfg_if;
 use clap::{Parser, ValueEnum};
 use inkwell::{
     context::Context,
@@ -225,6 +224,7 @@ fn link_exe(
         let runtime_path = dunce::canonicalize(runtime_path).unwrap();
         cmd.arg("-L").arg(&runtime_path);
     }
+    cmd.arg("-l").arg("luminary_runtime");
     for l in library {
         cmd.arg("-l").arg(l);
     }
@@ -233,18 +233,6 @@ fn link_exe(
     }
     #[cfg(target_os = "linux")]
     cmd.arg("-lm");
-    // #[cfg(target_os = "windows")]
-    cfg_if! {
-        if #[cfg(target_os = "windows")] {
-            if runtime_path.map(|rt| rt.join("luminary_runtime.dll.lib").exists()).unwrap_or(false) {
-                cmd.arg("-llluminary_runtime.dll");
-            } else {
-                cmd.arg("-lluminary_runtime");
-            }
-        } else {
-            cmd.arg("-lluminary_runtime");
-        }
-    }
     let child = cmd.spawn().unwrap();
     let clang_outout = child.wait_with_output().unwrap();
     if !clang_outout.status.success() {

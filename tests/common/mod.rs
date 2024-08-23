@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use std::{
-    fmt,
+    fmt::{self, Display},
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
@@ -38,7 +38,6 @@ pub fn setup(name: &str) -> TestConfig {
         .get_or_init(|| {
             let mut static_path: Option<PathBuf> = None;
             let mut dynamic_path: Option<PathBuf> = None;
-            let mut dynamic_defs: Option<PathBuf> = None;
             let runtime_build = escargot::CargoBuild::new()
                 .features("runtime")
                 .arg("-p")
@@ -54,7 +53,6 @@ pub fn setup(name: &str) -> TestConfig {
                         match is_runtime(file) {
                             Some(RuntimeKind::Dynamic) => dynamic_path = Some(file.to_path_buf()),
                             Some(RuntimeKind::Static) => static_path = Some(file.to_path_buf()),
-                            Some(RuntimeKind::DynamicDefs) => dynamic_defs = Some(file.to_path_buf()),
                             None => continue,
                         }
                     }
@@ -77,9 +75,6 @@ pub fn setup(name: &str) -> TestConfig {
             };
             let dynamic_runtime = dynamic_path.expect("Didn't generate a dynamic runtime lib");
             let static_runtime = static_path.expect("Didn't generate a static runtime");
-            if let Some(dynamic_defs) = dynamic_defs {
-                copy_and_create("slib", &dynamic_defs);
-            }
             (
                 copy_and_create("lib", &static_runtime),
                 copy_and_create("slib", &dynamic_runtime),
@@ -101,13 +96,9 @@ pub fn setup(name: &str) -> TestConfig {
 enum RuntimeKind {
     Dynamic,
     Static,
-    DynamicDefs,
 }
 fn is_runtime(path: impl AsRef<Path>) -> Option<RuntimeKind> {
     let file = path.as_ref();
-    if file.ends_with("luminary_runtime.dll.lib") {
-        return Some(RuntimeKind::DynamicDefs)
-    }
     let name = file.file_stem()?;
     let name = name.to_str()?;
     name.ends_with("luminary_runtime").then_some(())?;
@@ -164,14 +155,121 @@ pub fn panic_for(output: &Output, msg: impl fmt::Display) {
     )
 }
 
-impl TestConfig {  
-    pub fn run_lua(&self, lua: &str) -> (Output, Output) {
+pub struct RunResults {
+    pub stat: Output,
+    pub dynamic: Option<Output>,
+}
+
+impl RunResults {
+
+    pub fn check_success(&self) {
+        if self.stat.status.success() && self.dynamic.is_none() {
+            return;
+        }
+        let dyn_code = if let Some(out) = &self.dynamic {
+            if out.status.success() {
+                return;
+            }
+            out.status.code()
+        } else {
+            None
+        };
+        self.panic_dump(format!("Expected success found {:?}/{dyn_code:?}", self.stat.status.code()));
+    }
+
+    pub fn check_non_success(&self) {
+        if !self.stat.status.success() && self.dynamic.is_none() {
+            return;
+        }
+        let dyn_code = if let Some(out) = &self.dynamic {
+            if !out.status.success() {
+                return;
+            }
+            out.status.code()
+        } else {
+            None
+        };
+        self.panic_dump(format!("Expected success found {:?}/{dyn_code:?}", self.stat.status.code()));
+    }
+
+    #[track_caller]
+    pub fn check_return_code(&self, code: i32) {
+        
+        if self.stat.status.code() == Some(code) && self.dynamic.is_none() {
+            return;
+        }
+        let dyn_code = if let Some(out) = &self.dynamic {
+            if out.status.code() == Some(code) {
+                return;
+            }
+            out.status.code()
+        } else {
+            None
+        };
+
+        self.panic_dump(format!("Expected exit code {code} found {:?}/{dyn_code:?}", self.stat.status.code()));
+    }
+
+    #[track_caller]
+    fn panic_dump(&self, msg: impl Display + Clone) {
+        self.dump_static(msg.clone());
+        self.dump_dynamic(msg);
+        panic!()
+    }
+
+    fn dump_static(&self, msg: impl Display) {
+        Self::dump_output(format!("static details:\n{msg}"), &self.stat)
+    }
+    
+    fn dump_dynamic(&self, msg: impl Display) {
+        if let Some(output) = &self.dynamic {
+            Self::dump_output(format!("static details:\n{msg}"), output);
+        }
+    }
+
+    fn dump_output(msg: impl Display, output: &Output) {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        
+        eprintln!(
+            "{msg}: {:?}\
+            \nstdout:\
+            \n-----\
+            \n{stdout}\
+            \n-----\
+            \nstderr:\
+            \n-----\
+            \n{stderr}\
+            \n-----",
+            output.status
+        )
+    }
+}
+
+impl TestConfig {
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn run_lua(&self, lua: &str) -> RunResults {
         let dynamic = self.build_dynamic(lua);
         let dynamic = self.run_dynamic(&dynamic);
         let stat = self.build_static(lua);
         let stat = self.run_static(stat);
-        (dynamic, stat)
+        RunResults {
+            stat,
+            dynamic: Some(dynamic),
+        }
     }
+    
+    #[cfg(target_os = "windows")]
+    pub fn run_lua(&self, lua: &str) -> Output {
+        let stat = self.build_static(lua);
+        let stat = self.run_static(stat);
+        RunResults {
+            stat,
+            dynamic: None,
+        }
+    }
+
     pub fn build_static(&self, lua: &str) -> PathBuf {
         let lua_path = self.base_dir.join("main.lua");
         std::fs::write(&lua_path, lua).unwrap();

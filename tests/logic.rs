@@ -12,9 +12,8 @@ fn bool_eq() {
     for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
         let lua = format!("return {cmp}");
         let test = common::setup(&format!("{}{i}", std::thread::current().name().unwrap()));
-        let (d, s) = test.run_lua(&lua);
-        check_return_code(&d, exit);
-        check_return_code(&s, exit);
+        let res = test.run_lua(&lua);
+        res.check_return_code(exit);
     }
 }
 
@@ -29,9 +28,8 @@ fn int_eq() {
         for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
             let lua = format!("return ({cmp})");
             let test = common::setup(&format!("{thread_name}{l}{i}"));
-            let (d, s) = test.run_lua(&lua);
-            check_return_code(&d, exit);
-            check_return_code(&s, exit);
+            let res = test.run_lua(&lua);
+            res.check_return_code(exit);
         }
     })
 }
@@ -48,9 +46,8 @@ fn str_eq() {
         for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
             let lua = format!("return ({cmp})");
             let test = common::setup(&format!("{thread_name}{s}{i}"));
-            let (d, s) = test.run_lua(&lua);
-            check_return_code(&d, exit);
-            check_return_code(&s, exit);
+            let res = test.run_lua(&lua);
+            res.check_return_code(exit);
         }
     })
 }
