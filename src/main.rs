@@ -229,7 +229,7 @@ fn link_exe(
         cmd.arg("-l").arg(l);
     }
     for l in location {
-        cmd.arg("-L").arg(l);
+        cmd.arg("-L").arg(dunce::canonicalize(l).unwrap());
     }
     #[cfg(target_os = "linux")]
     cmd.arg("-lm");
