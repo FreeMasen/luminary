@@ -261,7 +261,7 @@ impl TestConfig {
     }
     
     #[cfg(target_os = "windows")]
-    pub fn run_lua(&self, lua: &str) -> Output {
+    pub fn run_lua(&self, lua: &str) -> RunResults {
         let stat = self.build_static(lua);
         let stat = self.run_static(stat);
         RunResults {
