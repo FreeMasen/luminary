@@ -18,6 +18,9 @@ uuid = { version = "1.10", features = ["v4"] }
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
 
+[profile.release]
+lto = "fat"
+
 [features]
 default = []
 runtime = []
