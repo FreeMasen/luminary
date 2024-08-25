@@ -43,8 +43,9 @@ jobs:
       uses: FreeMasen/llvm-install-action@v1.0.5
       with:
         version: '18.1.8'
+        set-path: false
     - name: Run Link Integration Tests
-      run: cargo test-codegen --test link || ls ./target/tmp/slib
+      run: cargo test-codegen --test link
     - name: Run Math Integration Tests
       run: cargo test-codegen --test math
     - name: Run Basic Functions Integration Tests
