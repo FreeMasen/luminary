@@ -1,6 +1,5 @@
 use std::{fmt, str::FromStr};
 
-use common::check_test;
 use proptest::test_runner::TestCaseError;
 mod common;
 

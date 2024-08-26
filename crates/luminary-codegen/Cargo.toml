@@ -1,0 +1,17 @@
+[package]
+name = "luminary-codegen"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+analisar.workspace = true
+bstr.workspace = true
+inkwell = { version = "0.5", features = ["llvm18-0"] }
+lex_lua.workspace = true
+runtime = { package = "luminary-runtime", path = "../runtime-lib", features = [
+    "names",
+] }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zstd-sys = { version = "2.0.12+zstd.1.5.6" }

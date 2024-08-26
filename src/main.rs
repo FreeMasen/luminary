@@ -78,7 +78,7 @@ impl Display for FileType {
 fn main() {
     env_logger::init();
     let args = Args::parse();
-    tracing::warn!("ARGS: {args:#?}");
+    log::warn!("ARGS: {args:#?}");
     let Args {
         input,
         output,
@@ -92,7 +92,7 @@ fn main() {
     } = args;
 
     let context = Context::create();
-    let module = luminary::run_on(&context, input.clone());
+    let module = codegen::run_on(&context, input.clone());
     module.verify().unwrap_or_else(|e| {
         if std::env::var("LUMINARY_DEBUG_OUTPUT_LL")
             .map(|v| v != "0")
@@ -159,7 +159,7 @@ fn main() {
                     })
                     .collect();
                 let tmp_path = tmp.join(format!("{rnd_name}{obj_ext}"));
-                tracing::debug!("tmp: {}", tmp_path.display());
+                log::debug!("tmp: {}", tmp_path.display());
                 std::fs::File::create(&tmp_path).unwrap();
                 (tmp_path, None)
             } else {

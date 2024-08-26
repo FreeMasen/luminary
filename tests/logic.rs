@@ -1,4 +1,3 @@
-use common::check_return_code;
 mod common;
 
 #[test]
