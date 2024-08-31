@@ -2,29 +2,48 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
-  # pull_request:
-  #   branches: [ "main" ]
+    branches: 
+      - "main"
+  pull_request:
+    branches: 
+      - "main"
 
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
-  build:
-
+  test_runtime:
     runs-on: ubuntu-latest
-
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run tests
+      run: cargo test-runtime
+      env: 
+        LUMINARY_PRINT_TVALUE: 1
+  integration_tests:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-14
+          # Windows is disabled here for the time being...
+          # - windows-latest
+      fail-fast: false
+    runs-on: ${{matrix.os}}
+    env:
+      LUMINARY_USE_VERBOSE_CLANG: 1
     steps:
     - uses: actions/checkout@v3
     - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1.8.3
+      id: install
+      uses: FreeMasen/llvm-install-action@v1.0.5
       with:
-        # The version of LLVM and Clang binaries to install.
-        version: 16
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-      env: 
-        LLVM_SYS_160_PREFIX: ${{ env.LLVM_PATH }}
-        LUMINARY_PRINT_TVALUE: 1
+        version: ${{ (matrix.os == 'windows-latest' && '18.1.7') || '18.1.8' }}
+        set-path: false
+    - name: Run Link Integration Tests
+      run: cargo test-codegen --test link
+    - name: Run Math Integration Tests
+      run: cargo test-codegen --test math
+    - name: Run Basic Functions Integration Tests
+      run: cargo test-codegen --test basic_fns
+    - name: Run Basic Functions Integration Tests
+      run: cargo test-codegen --test logic

@@ -1,0 +1,4 @@
+[alias]
+test-runtime = "test -p luminary-runtime --features runtime"
+build-runtime = "build -p luminary-runtime --features runtime,names"
+test-codegen = "test -p luminary"

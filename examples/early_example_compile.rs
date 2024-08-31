@@ -5,7 +5,7 @@ use std::{
 };
 
 use inkwell::context::Context;
-use luminary::run_on;
+use codegen::run_on;
 
 fn main() {
     let context = Context::create();

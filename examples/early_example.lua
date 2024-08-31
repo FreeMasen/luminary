@@ -8,3 +8,4 @@ print "hello world"
 print(true)
 print(false)
 print(nil)
+return c

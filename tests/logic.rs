@@ -1,0 +1,52 @@
+mod common;
+
+#[test]
+fn bool_eq() {
+    let cmps = [
+        ("true == true", 1),
+        ("true == false", 0),
+        ("false == false", 1),
+        ("false == true", 0),
+    ];
+    for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
+        let lua = format!("return {cmp}");
+        let test = common::setup(&format!("{}{i}", std::thread::current().name().unwrap()));
+        let res = test.run_lua(&lua);
+        res.check_return_code(exit);
+    }
+}
+
+#[test]
+fn int_eq() {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    proptest::proptest!(|(l: i64)| {
+        let cmps = [
+            (format!("({l}) == ({l})"), 1),
+            (format!("({l}) == ({})", l.wrapping_add(1)), 0),
+        ];
+        for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
+            let lua = format!("return ({cmp})");
+            let test = common::setup(&format!("{thread_name}{l}{i}"));
+            let res = test.run_lua(&lua);
+            res.check_return_code(exit);
+        }
+    })
+}
+
+#[test]
+fn str_eq() {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    // TODO: do better at strings...
+    proptest::proptest!(|(s in "[a-zA-Z0-9]*")| {
+        let cmps = [
+            (format!("('{s}') == (\"{s}\")"), 1),
+            (format!("('{s}') == false"), 0),
+        ];
+        for (i, (cmp, exit)) in cmps.into_iter().enumerate() {
+            let lua = format!("return ({cmp})");
+            let test = common::setup(&format!("{thread_name}{s}{i}"));
+            let res = test.run_lua(&lua);
+            res.check_return_code(exit);
+        }
+    })
+}

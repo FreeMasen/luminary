@@ -2,8 +2,8 @@ use std::{
     fmt::Display,
     fs::{File, OpenOptions},
     io::{Read, Stdout, Write},
-    path::{PathBuf, Path},
-    process::Command,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
 };
 
 use clap::{Parser, ValueEnum};
@@ -16,6 +16,7 @@ use inkwell::{
     },
     OptimizationLevel,
 };
+use rand::Rng;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -24,8 +25,18 @@ struct Args {
     output: Option<PathBuf>,
     #[arg(long, default_value_t = FileType::Exe)]
     filetype: FileType,
-    #[arg(long, short='O', default_value_t = 0)]
+    #[arg(long)]
+    intermediate_dir: Option<PathBuf>,
+    #[arg(long, short = 'O', default_value_t = 0)]
     opt: u8,
+    #[arg(long = "runtime", short)]
+    runtime_location: Option<PathBuf>,
+    #[arg(long, short = 'L')]
+    location: Vec<PathBuf>,
+    #[arg(long, short = 'l')]
+    library: Vec<String>,
+    #[arg(long, short)]
+    force: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -65,15 +76,37 @@ impl Display for FileType {
 }
 
 fn main() {
+    env_logger::init();
+    let args = Args::parse();
+    log::warn!("ARGS: {args:#?}");
     let Args {
         input,
         output,
         filetype,
+        intermediate_dir,
         opt,
-    } = Args::parse();
-    let context = Context::create();
-    let module = luminary::run_on(&context, input.clone());
+        runtime_location,
+        library,
+        location,
+        force,
+    } = args;
 
+    let context = Context::create();
+    let module = codegen::run_on(&context, input.clone());
+    module.verify().unwrap_or_else(|e| {
+        if std::env::var("LUMINARY_DEBUG_OUTPUT_LL")
+            .map(|v| v != "0")
+            .unwrap_or(false)
+        {
+            let mut dest = get_dest(output.as_ref());
+            dest.write_all(module.to_string().as_bytes()).unwrap();
+        }
+        if !force {
+            panic!("Failed to run {e}");
+        } else {
+            eprintln!("Warning invalid llvm module produced: `{e}`");
+        }
+    });
     match filetype {
         FileType::Ll => {
             let mut dest = get_dest(output.as_ref());
@@ -104,17 +137,51 @@ fn main() {
             }
         }
         FileType::Exe => {
+            #[cfg(target_os = "windows")]
+            let obj_ext = ".obj";
+            #[cfg(not(target_os = "windows"))]
+            let obj_ext = ".o";
+
             let obj = run_llc(LlvmFileType::Object, &module, opt);
-            let tmp_o = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
-            std::fs::write(tmp_o.path(), obj.as_slice()).unwrap();
-            
+
+            let (tmp_path, _tmp) = if let Some(tmp) = intermediate_dir {
+                std::fs::create_dir_all(&tmp).ok();
+                let mut rng = rand::thread_rng();
+                let rnd_name: String = (0..5)
+                    .map(|_| {
+                        char::from(if rng.r#gen() {
+                            rng.gen_range(b'a'..=b'z')
+                        } else if rng.r#gen() {
+                            rng.gen_range(b'A'..=b'Z')
+                        } else {
+                            rng.gen_range(b'0'..=b'9')
+                        })
+                    })
+                    .collect();
+                let tmp_path = tmp.join(format!("{rnd_name}{obj_ext}"));
+                log::debug!("tmp: {}", tmp_path.display());
+                std::fs::File::create(&tmp_path).unwrap();
+                (tmp_path, None)
+            } else {
+                let tmp_o = tempfile::Builder::new().suffix(obj_ext).tempfile().unwrap();
+                let p = tmp_o.path().to_path_buf();
+                (p, Some(tmp_o))
+            };
+            std::fs::write(&tmp_path, obj.as_slice()).unwrap();
+
             let (dest, tmp_file) = if let Some(dest_path) = output.as_ref() {
                 (dest_path.clone(), None)
             } else {
-                let tmp2 = tempfile::Builder::new().suffix(".o").tempfile().unwrap();
+                let tmp2 = tempfile::Builder::new().suffix(obj_ext).tempfile().unwrap();
                 (tmp2.path().to_owned(), Some(tmp2))
             };
-            link_exe(tmp_o.path(), &dest);
+            link_exe(
+                tmp_path.as_path(),
+                &dest,
+                runtime_location.as_ref(),
+                &library,
+                &location,
+            );
             if let Some(mut tmp) = tmp_file {
                 let mut out = std::io::stdout();
                 loop {
@@ -130,54 +197,70 @@ fn main() {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn link_exe(obj_path: &Path, dest: &PathBuf) {
-    let mut cmd = Command::new("ld");
-    cmd
-        .arg(obj_path)
-        .arg("/lib/x86_64-linux-gnu/Scrt1.o")
-        .arg("-o").arg(dest)
-        .arg("-pie")
-        .arg("-z").arg("relro")
-        .arg("--hash-style=gnu")
-        .arg("--build-id")
-        .arg("--eh-frame-hdr")
-        .arg("-m").arg("elf_x86_64")
-        .arg("-dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2")
-        .arg("-L").arg("/usr/lib/x86_64-linux-gnu")
-        .arg("-l").arg("m")
-        .arg("-l").arg("c");
-    let child = cmd.spawn().unwrap();
-    let ld_outout = child.wait_with_output().unwrap();
-    if !ld_outout.status.success() {
-        println!("LDOUT: {}", String::from_utf8_lossy(&ld_outout.stdout));
-        eprintln!("LDERR: {}", String::from_utf8_lossy(&ld_outout.stderr));
-        std::process::exit(1);
-    } else if !ld_outout.stdout.is_empty() {
-        println!("{}", String::from_utf8_lossy(&ld_outout.stdout));
-
+// #[cfg(unix)]
+fn link_exe(
+    obj_path: &Path,
+    dest: &PathBuf,
+    runtime_path: Option<&PathBuf>,
+    library: &[String],
+    location: &[PathBuf],
+) {
+    if !obj_path.exists() {
+        panic!("object path does not exist at {}", obj_path.display());
     }
-}
-
-
-
-#[cfg(not(target_os = "linux"))]
-fn link_exe(obj_path: &Path, dest: &PathBuf) {
     let mut cmd = Command::new("clang");
-    cmd.arg("-o").arg(dest);
-    if std::env::var("LUMINARY_USE_VERBOSE_CLANG").map(|s| !s.is_empty() && s != "0").unwrap_or(false) {
+    cmd.arg(obj_path)
+        .arg("-o")
+        .arg(dest)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let clang_verbose = std::env::var("LUMINARY_USE_VERBOSE_CLANG")
+        .map(|s| !s.is_empty() && s != "0")
+        .unwrap_or(false);
+    if clang_verbose {
         cmd.arg("--verbose");
     }
-    cmd.arg("-lm").arg(obj_path);
+    if let Some(runtime_path) = runtime_path {
+        let runtime_path = dunce::canonicalize(runtime_path).unwrap();
+        cmd.arg("-L").arg(&runtime_path);
+    }
+    cmd.arg("-l").arg("luminary_runtime");
+    for l in library {
+        cmd.arg("-l").arg(l);
+    }
+    for l in location {
+        cmd.arg("-L").arg(dunce::canonicalize(l).unwrap());
+    }
+    #[cfg(target_os = "linux")]
+    cmd.arg("-lm");
     let child = cmd.spawn().unwrap();
     let clang_outout = child.wait_with_output().unwrap();
     if !clang_outout.status.success() {
-        println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
-        eprintln!("{}", String::from_utf8_lossy(&clang_outout.stderr));
+        eprint!("clang");
+        for arg in cmd.get_args() {
+            eprint!(r#" "{}""#, arg.to_str().unwrap())
+        }
+        eprintln!();
+        eprintln!("linking with clang failed with the following output:");
+        std::fs::copy(obj_path, "failed-link.o").ok();
+
+        let stdout = String::from_utf8_lossy(&clang_outout.stdout);
+        let stderr = String::from_utf8_lossy(&clang_outout.stderr);
+        if !stdout.is_empty() {
+            eprintln!("{stdout}",);
+        }
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+        if !clang_verbose {
+            eprintln!("NOTE: set LUMINARY_USE_VERBOSE_CLANG=1 for more details");
+        }
+        if runtime_path.is_none() {
+            eprintln!("HINT: setting the argument --runtime-location to the directory containing libluminary_runtime.a|o might help");
+        }
         std::process::exit(1);
     } else {
         println!("{}", String::from_utf8_lossy(&clang_outout.stdout));
-
     }
 }
 
@@ -215,6 +298,7 @@ fn get_dest(dest: Option<&PathBuf>) -> Output {
         Output::File(
             OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .write(true)
                 .open(dest)
                 .unwrap(),
