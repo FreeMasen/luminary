@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" id="oranda" class="hacker">
+  <head>
+    <title>luminary</title>
+    
+    
+      <link sizes="any" type="image/svg+xml" rel="icon" href="/luminary/Luminary%20Logo.svg" />
+    
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="luminary" />
+    
+    
+    
+    <meta http-equiv="Permissions-Policy" content="interest-cohort=()" />
+    <link rel="stylesheet" href="/luminary/oranda-v0.6.1.css" />
+    
+    
+  </head>
+  <body>
+    <div class="container">
+      <div class="page-body">
+        
+          <div class="repo_banner">
+            <a href="https://github.com/FreeMasen/luminary">
+              <div class="github-icon" aria-hidden="true"></div>
+              Check out our GitHub!
+            </a>
+          </div>
+        
+
+        <main>
+          <header>
+            
+            <h1 class="title">luminary</h1>
+            
+  <nav class="nav">
+    <ul>
+      <li><a href="/luminary/">Home</a></li>
+
+      
+
+      
+        <li><a href="/luminary/artifacts/">Install</a></li>
+      
+
+      
+
+      
+
+      
+        <li><a href="/luminary/changelog/">Changelog</a></li>
+      
+    </ul>
+  </nav>
+
+          </header>
+
+          
+
+    
+
+
+
+<div class="artifacts" data-tag="v0.1.0-pre">
+  <div class="artifact-header target">
+    <h4>Install v0.1.0-pre</h4>
+    
+      <div><small class="published-date">Published on Oct  7 2023 at 22:48 UTC</small></div>
+    
+
+    <ul class="arches">
+      
+        <li class="arch" data-arch="x86_64-unknown-linux-gnu">
+          
+
+          <ul class="contents">
+            
+              
+              <li data-id="0" data-triple="x86_64-unknown-linux-gnu" class="install-content">
+                
+
+                
+                  
+                  <div class="download-wrapper">
+                    <a href="https://github.com/FreeMasen/luminary/releases/download/v0.1.0-pre/luminary-x86_64-unknown-linux-gnu.tar.xz">
+                      <button class="button primary">
+                        <span>Download</span>
+                        <span class="button-subtitle">luminary-x86_64-unknown-linux-gnu.tar.xz</span>
+                      </button>
+                    </a>
+                  </div>
+                
+              </li>
+            
+          </ul>
+        </li>
+      
+    </ul>
+  </div>
+
+  
+  <div class="mac-switch hidden">This project doesn't offer Apple Silicon downloads, but you can run Intel macOS binaries via Rosetta 2.</div>
+
+  
+  
+  <div class="bottom-options one">
+    <a href="/luminary/artifacts/" class="backup-download primary">View all installation options</a>
+    
+      
+        <div class="arch-select">Platform: Linux x64</div>
+      
+    
+  </div>
+</div>
+
+<a href="/luminary/artifacts/" class="button mobile-download primary">View all installation options</a>
+
+
+    <div class="oranda-hide">
+<h1>Luminary</h1>
+</div>
+<p><img src="./Luminary%20Logo.svg" alt="an animated luminary"></p>
+<p>A toy compiler for Lua</p>
+<h2>Currently Supported Lua</h2>
+<p>At this stage, the only supported Lua code is assignments, math operators, numbers, booleans, string
+literals and calling the <code>print</code> function with 1 value (additional values will be ignored).</p>
+<p>An example of what is supported would look like this:</p>
+<pre style="background-color:#263238;"><span style="font-style:italic;color:#546e7a;">-- example.lua
+</span><span style="color:#eeffff;">a </span><span style="color:#89ddff;">= </span><span style="color:#f78c6c;">1
+</span><span style="color:#82aaff;">print</span><span style="color:#eeffff;">(a)
+</span><span style="color:#eeffff;">b </span><span style="color:#89ddff;">= </span><span style="color:#f78c6c;">2.5
+</span><span style="color:#82aaff;">print</span><span style="color:#eeffff;">(b)
+</span><span style="color:#eeffff;">c </span><span style="color:#89ddff;">=</span><span style="color:#eeffff;"> a </span><span style="color:#89ddff;">+</span><span style="color:#eeffff;"> b
+</span><span style="color:#82aaff;">print</span><span style="color:#eeffff;">(c)
+</span><span style="color:#82aaff;">print </span><span style="color:#89ddff;">"</span><span style="color:#c3e88d;">hello world</span><span style="color:#89ddff;">"
+</span><span style="color:#82aaff;">print</span><span style="color:#eeffff;">(</span><span style="color:#f78c6c;">true</span><span style="color:#eeffff;">)
+</span><span style="color:#82aaff;">print</span><span style="color:#eeffff;">(</span><span style="color:#f78c6c;">false</span><span style="color:#eeffff;">)
+</span><span style="color:#82aaff;">print</span><span style="color:#eeffff;">(</span><span style="color:#f78c6c;">nil</span><span style="color:#eeffff;">)
+</span></pre>
+
+<p>compiling and running this would look something like this:</p>
+<pre style="background-color:#263238;"><span style="color:#82aaff;">luminary example.lua</span><span style="color:#89ddff;"> -</span><span style="color:#f78c6c;">o</span><span style="color:#82aaff;"> example
+</span><span style="color:#82aaff;">./example
+</span><span style="color:#82aaff;">1.000000
+</span><span style="color:#82aaff;">2.500000
+</span><span style="color:#82aaff;">3.500000
+</span><span style="color:#89ddff;">"</span><span style="color:#c3e88d;">hello world</span><span style="color:#89ddff;">"
+</span><span style="color:#82aaff;">true
+</span><span style="color:#82aaff;">false
+</span><span style="color:#82aaff;">nil
+</span></pre>
+
+<h2>Dependencies</h2>
+<p><code>clang</code> is used for linking the final output of an executable output.</p>
+
+
+
+        </main>
+      </div>
+
+      <footer>
+        
+          <a href="https://github.com/FreeMasen/luminary"><div class="github-icon" aria-hidden="true"></div></a>
+        
+        <span>
+          luminary
+        </span>
+      </footer>
+    </div>
+
+    
+    
+
+    
+
+    <script src="/luminary/artifacts.js"></script>
+
+
+  </body>
+</html>
